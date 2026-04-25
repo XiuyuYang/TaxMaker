@@ -1,0 +1,11 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+body { background: #1a1a1a; display: flex; justify-content: center; align-items: flex-start; }
+#root { width: 100%; max-width: 430px; min-height: 100dvh; position: relative; background: #F4F5F7; }
+@media (min-width: 431px) {
+  body { align-items: center; min-height: 100vh; }
+  #root { min-height: 844px; max-height: 100vh; overflow: hidden; box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 40px 80px rgba(0,0,0,0.6); }
+}
+button { -webkit-tap-highlight-color: transparent; }
+::-webkit-scrollbar { display: none; }
+input { font-family: inherit; }

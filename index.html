@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>小票管家 · TaxMaker</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: #1a1a1a; font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    body { display: flex; justify-content: center; align-items: center; }
+    #root { width: 390px; height: 844px; overflow: hidden; position: relative; box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 40px 80px rgba(0,0,0,0.6); border-radius: 2px; }
+    @media (max-width: 430px) {
+      body { align-items: flex-start; background: transparent; }
+      #root { width: 100vw; height: 100dvh; box-shadow: none; border-radius: 0; }
+    }
+    button { -webkit-tap-highlight-color: transparent; outline: none; }
+    ::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useEffect } = React;
+
+// ── Tokens ──────────────────────────────────────────────────────────────────
+const TOKENS = {
+  light: {
+    appBg:'#F4F5F7', surface:'#FFFFFF', surfaceAlt:'#F8F9FB', surfaceMuted:'#EEF1F4',
+    textPrimary:'#0B1F2A', textSecondary:'#556676', textTertiary:'#8A98A3', textInverse:'#FFFFFF',
+    brand:'#13B5B1', brandDeep:'#0E8F8C', brandSoft:'#E6F7F7',
+    accent:'#F2704E', accentSoft:'#FDECE4',
+    success:'#2FA86B', successSoft:'#E3F4EA',
+    warning:'#E0A62B', warningSoft:'#FBF1DA',
+    danger:'#D94F4F', dangerSoft:'#FBE6E6',
+    border:'#E4E8ED', borderStrong:'#CBD2D9', divider:'rgba(11,31,42,0.08)',
+    shadowCard:'0 1px 2px rgba(11,31,42,0.04), 0 2px 8px rgba(11,31,42,0.04)',
+    shadowLift:'0 2px 4px rgba(11,31,42,0.06), 0 12px 32px rgba(11,31,42,0.08)',
+  },
+  dark: {
+    appBg:'#0B1216', surface:'#151D23', surfaceAlt:'#1A232A', surfaceMuted:'#202A32',
+    textPrimary:'#EAF0F4', textSecondary:'#9AA8B3', textTertiary:'#6B7884', textInverse:'#0B1216',
+    brand:'#2AD4CF', brandDeep:'#13B5B1', brandSoft:'rgba(42,212,207,0.14)',
+    accent:'#FF8863', accentSoft:'rgba(255,136,99,0.14)',
+    success:'#52C48A', successSoft:'rgba(82,196,138,0.14)',
+    warning:'#E8BC56', warningSoft:'rgba(232,188,86,0.14)',
+    danger:'#EC6B6B', dangerSoft:'rgba(236,107,107,0.14)',
+    border:'#27333C', borderStrong:'#37454F', divider:'rgba(255,255,255,0.06)',
+    shadowCard:'0 1px 2px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.3)',
+    shadowLift:'0 2px 4px rgba(0,0,0,0.5), 0 12px 32px rgba(0,0,0,0.45)',
+  },
+};
+const FONTS = {
+  ui: '-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue",system-ui,sans-serif',
+  display: '-apple-system,BlinkMacSystemFont,"SF Pro Display","PingFang SC",system-ui,sans-serif',
+  num: '"SF Pro Rounded",-apple-system,ui-rounded,system-ui,sans-serif',
+  mono: '"SF Mono",ui-monospace,Menlo,monospace',
+};
+
+// ── Icons ────────────────────────────────────────────────────────────────────
+const Icon = ({ name, size=20, color='currentColor', strokeWidth=1.7, style={} }) => {
+  const p = { width:size, height:size, viewBox:'0 0 24 24', fill:'none', stroke:color, strokeWidth, strokeLinecap:'round', strokeLinejoin:'round', style, flexShrink:0 };
+  const P = {
+    camera: <><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8z"/><circle cx="12" cy="13" r="3.8"/></>,
+    receipt: <><path d="M6 3h12v18l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5L6 21V3z"/><path d="M9 8h6M9 12h6M9 16h4"/></>,
+    upload: <><path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 20h14"/></>,
+    gallery: <><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.5"/><path d="M3 17l5-5 4 4 3-3 6 6"/></>,
+    flash: <path d="M13 3 4 14h6l-1 7 9-11h-6l1-7z"/>,
+    search: <><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></>,
+    filter: <path d="M3 5h18l-7 9v6l-4-2v-4L3 5z"/>,
+    chevR: <path d="m9 6 6 6-6 6"/>,
+    chevD: <path d="m6 9 6 6 6-6"/>,
+    chevL: <path d="m15 6-6 6 6 6"/>,
+    close: <path d="M6 6l12 12M18 6 6 18"/>,
+    check: <path d="m5 12 5 5L20 7"/>,
+    plus: <path d="M12 5v14M5 12h14"/>,
+    edit: <><path d="M4 20h4L20 8l-4-4L4 16v4z"/><path d="m13 7 4 4"/></>,
+    sparkle: <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>,
+    home: <><path d="M4 11 12 4l8 7"/><path d="M6 10v10h12V10"/></>,
+    chart: <><path d="M4 20V8M10 20V4M16 20v-7M22 20H2"/></>,
+    folder: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>,
+    download: <><path d="M12 4v12M7 11l5 5 5-5"/><path d="M5 20h14"/></>,
+    send: <path d="m21 3-9 18-2-8-8-2 19-8z"/>,
+    bell: <><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16z"/><path d="M10 20a2 2 0 0 0 4 0"/></>,
+    user: <><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></>,
+    calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></>,
+    coffee: <><path d="M4 8h13v7a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8z"/><path d="M17 10h2a2 2 0 0 1 0 6h-1M8 3v2M12 3v2"/></>,
+    car: <><path d="M4 16h16v-4l-2-5H6l-2 5v4z"/><circle cx="8" cy="17" r="1.6"/><circle cx="16" cy="17" r="1.6"/><path d="M4 13h16"/></>,
+    briefcase: <><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/></>,
+    tag: <><path d="M3 13V4a1 1 0 0 1 1-1h9l8 8-10 10-8-8z"/><circle cx="8" cy="8" r="1.3"/></>,
+    lock: <><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></>,
+    shield: <path d="M12 3 4 6v6c0 4.5 3.5 8 8 9 4.5-1 8-4.5 8-9V6l-8-3z"/>,
+    merge: <><path d="M6 4v4c0 3 3 5 6 5s6-2 6-5V4M12 13v7"/></>,
+    spark: <path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3z"/>,
+    sun: <><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5"/></>,
+    moon: <path d="M21 13a9 9 0 1 1-10-10 7 7 0 0 0 10 10z"/>,
+    info: <><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.01"/></>,
+    wand: <><path d="m4 20 10-10M14 6l4 4M16 4l0 4M18 2l0 4M14 6l-4 0M12 8l-4 0"/></>,
+    list: <><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.2" fill="currentColor" stroke="none"/></>,
+    grid: <><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></>,
+    scan: <><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M4 12h16"/></>,
+  };
+  return <svg {...p}>{P[name]||null}</svg>;
+};
+
+// ── Primitives ───────────────────────────────────────────────────────────────
+const fmt = (n,dp=2) => new Intl.NumberFormat('en-NZ',{minimumFractionDigits:dp,maximumFractionDigits:dp}).format(n);
+const nz = n => '$'+fmt(n);
+
+function IOSStatusBar({ dark=false, time='9:41' }) {
+  const c = dark ? '#fff' : '#000';
+  return (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 24px 6px', position:'relative', zIndex:20 }}>
+      <span style={{ fontFamily:FONTS.ui, fontWeight:600, fontSize:15, color:c }}>{time}</span>
+      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+        <svg width="17" height="11" viewBox="0 0 17 11"><rect x="0" y="6.5" width="3" height="4.5" rx="0.6" fill={c}/><rect x="4.5" y="4.5" width="3" height="6.5" rx="0.6" fill={c}/><rect x="9" y="2" width="3" height="9" rx="0.6" fill={c}/><rect x="13.5" y="0" width="3" height="11" rx="0.6" fill={c} opacity="0.4"/></svg>
+        <svg width="15" height="11" viewBox="0 0 15 11"><path d="M7.5 2.8C9.5 2.8 11.3 3.6 12.6 4.9L13.6 3.9C12 2.3 9.9 1.3 7.5 1.3 5.1 1.3 3 2.3 1.4 3.9L2.4 4.9C3.7 3.6 5.5 2.8 7.5 2.8Z" fill={c}/><path d="M7.5 6C8.7 6 9.8 6.5 10.6 7.3L11.6 6.3C10.5 5.2 9.1 4.5 7.5 4.5 5.9 4.5 4.5 5.2 3.4 6.3L4.4 7.3C5.2 6.5 6.3 6 7.5 6Z" fill={c}/><circle cx="7.5" cy="9.5" r="1.4" fill={c}/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12"><rect x="0.5" y="0.5" width="21" height="11" rx="3.2" stroke={c} strokeOpacity="0.35" fill="none"/><rect x="2" y="2" width="18" height="8" rx="1.8" fill={c}/><path d="M23 4V8C23.8 7.7 24.5 6.8 24.5 6 24.5 5.2 23.8 4.3 23 4Z" fill={c} fillOpacity="0.4"/></svg>
+      </div>
+    </div>
+  );
+}
+
+function ScreenStatusBar({ dark }) {
+  return <div style={{ position:'absolute', top:0, left:0, right:0, zIndex:10 }}><IOSStatusBar dark={dark}/></div>;
+}
+
+function Screen({ t, children, bg }) {
+  return (
+    <div style={{ height:'100%', width:'100%', background:bg||t.appBg, color:t.textPrimary, fontFamily:FONTS.ui, overflow:'hidden', position:'relative', display:'flex', flexDirection:'column' }}>
+      {children}
+    </div>
+  );
+}
+
+function Body({ children, style={} }) {
+  return <div style={{ flex:1, overflowY:'auto', overflowX:'hidden', WebkitOverflowScrolling:'touch', ...style }}>{children}</div>;
+}
+
+function Card({ t, children, style={}, pad=16 }) {
+  return <div style={{ background:t.surface, borderRadius:14, padding:pad, border:`1px solid ${t.border}`, boxShadow:t.shadowCard, ...style }}>{children}</div>;
+}
+
+function Chip({ t, label, tone='default', icon, size='md' }) {
+  const tones = {
+    default:{ bg:t.surfaceMuted, fg:t.textSecondary },
+    brand:  { bg:t.brandSoft,   fg:t.brandDeep },
+    success:{ bg:t.successSoft, fg:t.success },
+    warn:   { bg:t.warningSoft, fg:t.warning },
+    danger: { bg:t.dangerSoft,  fg:t.danger },
+    accent: { bg:t.accentSoft,  fg:t.accent },
+  };
+  const s = tones[tone]||tones.default;
+  return (
+    <span style={{ display:'inline-flex', alignItems:'center', gap:4, background:s.bg, color:s.fg, padding:size==='sm'?'2px 8px':'4px 10px', borderRadius:999, fontSize:size==='sm'?11:12, fontWeight:600, letterSpacing:0.1, lineHeight:1.3, whiteSpace:'nowrap', fontFamily:FONTS.ui }}>
+      {icon && <Icon name={icon} size={size==='sm'?12:14}/>}
+      {label}
+    </span>
+  );
+}
+
+function Button({ t, children, variant='primary', icon, iconRight, size='md', block, onClick, style={} }) {
+  const variants = {
+    primary:  { bg:t.brand, fg:'#fff', border:'transparent' },
+    deep:     { bg:t.brandDeep, fg:'#fff', border:'transparent' },
+    secondary:{ bg:t.surface, fg:t.textPrimary, border:t.borderStrong },
+    ghost:    { bg:'transparent', fg:t.textPrimary, border:'transparent' },
+    soft:     { bg:t.brandSoft, fg:t.brandDeep, border:'transparent' },
+    danger:   { bg:t.danger, fg:'#fff', border:'transparent' },
+  };
+  const v = variants[variant]||variants.primary;
+  const sizes = { sm:{h:32,fs:13,pad:'0 12px',r:8}, md:{h:40,fs:14,pad:'0 16px',r:10}, lg:{h:48,fs:15,pad:'0 20px',r:12} };
+  const sz = sizes[size]||sizes.md;
+  return (
+    <button onClick={onClick} style={{ height:sz.h, padding:sz.pad, borderRadius:sz.r, background:v.bg, color:v.fg, border:`1px solid ${v.border}`, fontSize:sz.fs, fontWeight:600, letterSpacing:-0.1, fontFamily:FONTS.ui, cursor:'pointer', display:'inline-flex', alignItems:'center', justifyContent:'center', gap:6, width:block?'100%':undefined, whiteSpace:'nowrap', ...style }}>
+      {icon && <Icon name={icon} size={sz.fs+4}/>}
+      {children}
+      {iconRight && <Icon name={iconRight} size={sz.fs+4}/>}
+    </button>
+  );
+}
+
+function TabBar({ t, current, onChange }) {
+  const items = [
+    { id:'home',   label:'概览', icon:'home' },
+    { id:'list',   label:'小票', icon:'receipt' },
+    { id:'capture',label:'',    icon:'plus', primary:true },
+    { id:'report', label:'报表', icon:'chart' },
+    { id:'me',     label:'我的', icon:'user' },
+  ];
+  return (
+    <div style={{ position:'absolute', left:0, right:0, bottom:0, zIndex:40, background:t.surface+'E6', backdropFilter:'blur(18px) saturate(180%)', WebkitBackdropFilter:'blur(18px) saturate(180%)', borderTop:`1px solid ${t.border}`, paddingBottom:24, paddingTop:8, display:'flex', alignItems:'center', justifyContent:'space-around' }}>
+      {items.map(i => {
+        const active = current===i.id;
+        if (i.primary) return (
+          <button key={i.id} onClick={() => onChange?.(i.id)} style={{ width:48, height:48, borderRadius:14, background:t.brand, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', border:'none', cursor:'pointer', boxShadow:`0 6px 18px ${t.brand}55`, marginTop:-6 }}>
+            <Icon name="camera" size={22}/>
+          </button>
+        );
+        return (
+          <button key={i.id} onClick={() => onChange?.(i.id)} style={{ background:'transparent', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:2, color:active?t.brand:t.textTertiary, width:56, padding:'4px 0' }}>
+            <Icon name={i.icon} size={22} strokeWidth={active?2:1.7}/>
+            <span style={{ fontSize:10.5, fontWeight:active?600:500, fontFamily:FONTS.ui }}>{i.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+const CAT_META = {
+  '餐饮':    { c:'#F2704E', icon:'coffee' },
+  '交通':    { c:'#3D8CF5', icon:'car' },
+  '办公用品': { c:'#7B61FF', icon:'briefcase' },
+  '通讯':    { c:'#13B5B1', icon:'send' },
+  '差旅':    { c:'#E0A62B', icon:'briefcase' },
+  '娱乐':    { c:'#D94F8A', icon:'spark' },
+  '其他':    { c:'#8A98A3', icon:'tag' },
+};
+function CategoryDot({ cat, size=32 }) {
+  const m = CAT_META[cat]||CAT_META['其他'];
+  return <div style={{ width:size, height:size, borderRadius:size*0.32, background:m.c+'1F', color:m.c, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}><Icon name={m.icon} size={Math.round(size*0.55)} strokeWidth={1.9}/></div>;
+}
+
+function ReceiptThumb({ t, merchant, amount, rotate=0, width=120, height=160 }) {
+  const id = `stripe-${merchant.replace(/\s/g,'')}`;
+  return (
+    <div style={{ width, height, position:'relative', transform:`rotate(${rotate}deg)`, borderRadius:6, background:'#fff', boxShadow:'0 1px 2px rgba(0,0,0,0.1), 0 6px 16px rgba(0,0,0,0.12)', overflow:'hidden', fontFamily:FONTS.mono, flexShrink:0 }}>
+      <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ position:'absolute', inset:0 }}>
+        <defs><pattern id={id} width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#F5F3EE"/><line x1="0" y1="0" x2="0" y2="8" stroke="#EDEAE3" strokeWidth="3"/></pattern></defs>
+        <rect width={width} height={height} fill={`url(#${id})`}/>
+      </svg>
+      <div style={{ position:'absolute', top:10, left:10, right:10, display:'flex', flexDirection:'column', gap:3 }}>
+        <div style={{ fontSize:9, fontWeight:700, color:'#1a1a1a', letterSpacing:0.5 }}>{merchant}</div>
+        <div style={{ height:1, background:'#333', opacity:0.3 }}/><div style={{ height:1, background:'#333', opacity:0.2, marginTop:2 }}/><div style={{ height:1, background:'#333', opacity:0.2 }}/>
+      </div>
+      <div style={{ position:'absolute', bottom:14, left:10, right:10, display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
+        <span style={{ fontSize:8, color:'#666' }}>TOTAL</span>
+        <span style={{ fontSize:11, fontWeight:700, color:'#1a1a1a' }}>{amount}</span>
+      </div>
+      <svg width="100%" height="6" viewBox={`0 0 ${width} 6`} preserveAspectRatio="none" style={{ position:'absolute', bottom:0, left:0 }}>
+        <path d={`M0 0 ${Array.from({length:Math.floor(width/6)}).map((_,i) => `L${i*6+3} 6 L${i*6+6} 0`).join(' ')} L${width} 0 L${width} 6 L0 6 Z`} fill="#fff"/>
+      </svg>
+    </div>
+  );
+}
+
+// ── Screen 1: Dashboard ───────────────────────────────────────────────────────
+function DashboardScreen({ t, onNavigate }) {
+  const totalNet=2847.32, gstCollected=426.73, reimbursable=1928.44, daysLeft=14;
+  const isDark = t===TOKENS.dark;
+  const byCat = [
+    {cat:'办公用品',amount:842.10,pct:0.30},{cat:'交通',amount:612.55,pct:0.22},
+    {cat:'差旅',amount:589.40,pct:0.21},{cat:'餐饮',amount:487.22,pct:0.17},{cat:'通讯',amount:316.05,pct:0.10},
+  ];
+  const recent = [
+    {merchant:'Officemax',cat:'办公用品',amount:127.83,date:'今天',status:'ai'},
+    {merchant:'Z Energy',cat:'交通',amount:72.40,date:'今天',status:'ok'},
+    {merchant:'Mojo Coffee',cat:'餐饮',amount:18.50,date:'昨天',status:'ok'},
+    {merchant:'Air NZ',cat:'差旅',amount:289.00,date:'3天前',status:'ok'},
+  ];
+  return (
+    <Screen t={t}>
+      <ScreenStatusBar dark={isDark}/>
+      <div style={{ padding:'52px 20px 14px', background:t.surface, borderBottom:`1px solid ${t.border}` }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+          <div style={{ width:40, height:40, borderRadius:20, background:`linear-gradient(135deg,${t.brand},${t.brandDeep})`, color:'#fff', fontWeight:700, fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:FONTS.num }}>LW</div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:13, color:t.textTertiary, fontWeight:500 }}>下午好</div>
+            <div style={{ fontSize:16, fontWeight:600, color:t.textPrimary, letterSpacing:-0.2 }}>刘伟 · 个人账户</div>
+          </div>
+          <button style={{ width:40, height:40, borderRadius:20, border:`1px solid ${t.border}`, background:t.surface, color:t.textSecondary, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', position:'relative' }}>
+            <Icon name="bell" size={18}/>
+            <div style={{ position:'absolute', top:8, right:9, width:8, height:8, borderRadius:4, background:t.accent, border:`2px solid ${t.surface}` }}/>
+          </button>
+        </div>
+      </div>
+      <Body style={{ paddingBottom:110 }}>
+        <div style={{ padding:'16px 16px 0' }}>
+          <div style={{ borderRadius:18, background:`linear-gradient(135deg,${t.brandDeep},${t.brand})`, color:'#fff', padding:'18px 20px 20px', position:'relative', overflow:'hidden', boxShadow:t.shadowLift }}>
+            <svg style={{ position:'absolute', right:-40, top:-40, opacity:0.18 }} width="180" height="180" viewBox="0 0 180 180" fill="none"><circle cx="90" cy="90" r="40" stroke="#fff" strokeWidth="1"/><circle cx="90" cy="90" r="60" stroke="#fff" strokeWidth="1"/><circle cx="90" cy="90" r="80" stroke="#fff" strokeWidth="1"/></svg>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+              <div>
+                <div style={{ fontSize:12, opacity:0.8, fontWeight:500, letterSpacing:0.5, textTransform:'uppercase' }}>当前 GST 周期</div>
+                <div style={{ fontSize:15, fontWeight:500, marginTop:4 }}>2026年 2月 – 3月</div>
+              </div>
+              <div style={{ background:'rgba(255,255,255,0.18)', padding:'4px 10px', borderRadius:999, fontSize:11, fontWeight:600 }}>还有 {daysLeft} 天</div>
+            </div>
+            <div style={{ marginTop:18, display:'flex', alignItems:'baseline', gap:8 }}>
+              <span style={{ fontFamily:FONTS.num, fontSize:36, fontWeight:700, letterSpacing:-1 }}>{nz(totalNet)}</span>
+              <span style={{ fontSize:13, opacity:0.7, fontWeight:500 }}>已记录支出</span>
+            </div>
+            <div style={{ marginTop:16, paddingTop:14, borderTop:'1px solid rgba(255,255,255,0.2)', display:'flex', gap:24 }}>
+              <div><div style={{ fontSize:11, opacity:0.75, fontWeight:500 }}>含 GST</div><div style={{ fontFamily:FONTS.num, fontSize:16, fontWeight:600, marginTop:2 }}>{nz(gstCollected)}</div></div>
+              <div style={{ width:1, background:'rgba(255,255,255,0.25)' }}/>
+              <div><div style={{ fontSize:11, opacity:0.75, fontWeight:500 }}>可抵扣</div><div style={{ fontFamily:FONTS.num, fontSize:16, fontWeight:600, marginTop:2 }}>{nz(reimbursable)}</div></div>
+              <div style={{ flex:1 }}/>
+              <button onClick={() => onNavigate?.('report')} style={{ alignSelf:'flex-end', background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.25)', color:'#fff', fontSize:12, fontWeight:600, padding:'6px 10px', borderRadius:8, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:4 }}>查看表格 <Icon name="chevR" size={12}/></button>
+            </div>
+          </div>
+        </div>
+        <div style={{ padding:'16px', display:'flex', gap:10 }}>
+          {[
+            { nav:'capture', bg:t.brandSoft, color:t.brandDeep, icon:'camera', title:'拍摄小票', sub:'AI 自动识别' },
+            { nav:'batch',   bg:t.accentSoft, color:t.accent, icon:'upload', title:'批量导入', sub:'从相册 / 文件' },
+            { nav:'report',  bg:'rgba(123,97,255,0.14)', color:'#7B61FF', icon:'download', title:'导出报表', sub:'GST101 / CSV' },
+          ].map(a => (
+            <button key={a.nav} onClick={() => onNavigate?.(a.nav)} style={{ flex:1, background:t.surface, border:`1px solid ${t.border}`, borderRadius:14, padding:'14px 12px', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'flex-start', gap:6 }}>
+              <div style={{ width:34, height:34, borderRadius:9, background:a.bg, color:a.color, display:'flex', alignItems:'center', justifyContent:'center' }}><Icon name={a.icon} size={18}/></div>
+              <div style={{ fontSize:13, fontWeight:600, color:t.textPrimary }}>{a.title}</div>
+              <div style={{ fontSize:11, color:t.textTertiary }}>{a.sub}</div>
+            </button>
+          ))}
+        </div>
+        <div style={{ padding:'0 16px', marginBottom:16 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:10 }}>
+            <div style={{ fontSize:15, fontWeight:600, color:t.textPrimary }}>本期分类</div>
+            <button style={{ background:'none', border:'none', color:t.brand, fontSize:13, fontWeight:500, cursor:'pointer' }}>详情</button>
+          </div>
+          <Card t={t} pad={0}>
+            <div style={{ padding:16, paddingBottom:10 }}>
+              <div style={{ height:10, borderRadius:5, overflow:'hidden', display:'flex' }}>
+                {byCat.map(b => <div key={b.cat} style={{ width:`${b.pct*100}%`, background:CAT_META[b.cat].c, height:'100%' }}/>)}
+              </div>
+            </div>
+            {byCat.map((b,i) => (
+              <div key={b.cat} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 16px', borderTop:i===0?'none':`1px solid ${t.divider}` }}>
+                <CategoryDot cat={b.cat} size={28}/>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:14, fontWeight:500, color:t.textPrimary }}>{b.cat}</div>
+                  <div style={{ fontSize:11, color:t.textTertiary, marginTop:1 }}>{Math.round(b.pct*100)}%</div>
+                </div>
+                <div style={{ fontFamily:FONTS.num, fontSize:15, fontWeight:600, color:t.textPrimary }}>{nz(b.amount)}</div>
+              </div>
+            ))}
+          </Card>
+        </div>
+        <div style={{ padding:'0 16px' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:10 }}>
+            <div style={{ fontSize:15, fontWeight:600, color:t.textPrimary }}>最近上传</div>
+            <button onClick={() => onNavigate?.('list')} style={{ background:'none', border:'none', color:t.brand, fontSize:13, fontWeight:500, cursor:'pointer' }}>全部 →</button>
+          </div>
+          <Card t={t} pad={0}>
+            {recent.map((r,i) => (
+              <div key={i} onClick={() => r.status==='ai'&&onNavigate?.('confirm')} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', borderTop:i===0?'none':`1px solid ${t.divider}`, cursor:r.status==='ai'?'pointer':'default' }}>
+                <CategoryDot cat={r.cat} size={36}/>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    <span style={{ fontSize:14, fontWeight:600, color:t.textPrimary }}>{r.merchant}</span>
+                    {r.status==='ai' && <Chip t={t} label="待审核" tone="warn" size="sm"/>}
+                  </div>
+                  <div style={{ fontSize:12, color:t.textTertiary, marginTop:2 }}>{r.cat} · {r.date}</div>
+                </div>
+                <div style={{ fontFamily:FONTS.num, fontSize:15, fontWeight:600, color:t.textPrimary }}>{nz(r.amount)}</div>
+              </div>
+            ))}
+          </Card>
+        </div>
+      </Body>
+      <TabBar t={t} current="home" onChange={onNavigate}/>
+    </Screen>
+  );
+}
+
+// ── Screen 2: Capture ─────────────────────────────────────────────────────────
+function CaptureScreen({ t, onNavigate }) {
+  return (
+    <Screen t={t} bg="#0A0D0F">
+      <ScreenStatusBar dark={true}/>
+      <div style={{ position:'absolute', top:0, left:0, right:0, zIndex:20, padding:'52px 20px 12px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <button onClick={() => onNavigate?.('home')} style={{ width:38, height:38, borderRadius:19, background:'rgba(0,0,0,0.45)', border:'none', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', backdropFilter:'blur(10px)' }}>
+          <Icon name="close" size={20}/>
+        </button>
+        <div style={{ background:'rgba(0,0,0,0.45)', padding:'6px 14px', borderRadius:999, color:'#fff', fontSize:13, fontWeight:600, display:'flex', gap:14, backdropFilter:'blur(10px)' }}>
+          <span style={{ color:t.brand }}>单张</span><span style={{ opacity:0.6 }}>批量</span><span style={{ opacity:0.6 }}>文档</span>
+        </div>
+        <button style={{ width:38, height:38, borderRadius:19, background:'rgba(0,0,0,0.45)', border:'none', color:'#FFD84D', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', backdropFilter:'blur(10px)' }}>
+          <Icon name="flash" size={18}/>
+        </button>
+      </div>
+      <div style={{ flex:1, position:'relative', overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <div style={{ position:'absolute', inset:0, background:'radial-gradient(circle at 30% 20%, #2a2e33 0%, #15181b 50%, #0a0d0f 100%)' }}/>
+        <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%) rotate(-3deg) perspective(800px) rotateX(6deg)' }}>
+          <ReceiptThumb t={t} merchant="MOJO COFFEE" amount="$42.80" width={210} height={300}/>
+        </div>
+        <svg style={{ position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none' }} viewBox="0 0 390 600" preserveAspectRatio="none">
+          {(() => {
+            const pts=[[80,110],[310,116],[310,440],[80,434]],br=18,sw=2.5,c='#2AD4CF';
+            return <>
+              <path d={`M${pts[0][0]},${pts[0][1]} L${pts[1][0]},${pts[1][1]} L${pts[2][0]},${pts[2][1]} L${pts[3][0]},${pts[3][1]} Z`} stroke={c} strokeWidth="1" strokeDasharray="4 4" fill="rgba(42,212,207,0.06)"/>
+              {pts.map(([x,y],i) => { const dx=i===1||i===2?-br:br,dy=i<2?br:-br; return <g key={i} stroke={c} strokeWidth={sw} strokeLinecap="round" fill="none"><line x1={x} y1={y} x2={x+dx} y2={y}/><line x1={x} y1={y} x2={x} y2={y+dy}/></g>; })}
+            </>;
+          })()}
+        </svg>
+        <div style={{ position:'absolute', top:116, left:'50%', transform:'translateX(-50%)', background:'rgba(19,181,177,0.92)', backdropFilter:'blur(10px)', color:'#fff', padding:'6px 12px', borderRadius:999, fontSize:12, fontWeight:600, display:'flex', alignItems:'center', gap:6, boxShadow:'0 4px 12px rgba(19,181,177,0.35)' }}>
+          <Icon name="sparkle" size={13}/> 已检测小票边缘
+        </div>
+        <div style={{ position:'absolute', bottom:230, left:0, right:0, textAlign:'center', color:'rgba(255,255,255,0.7)', fontSize:13, fontWeight:500, padding:'0 40px' }}>对准小票四角 · 保持平整</div>
+      </div>
+      <div style={{ position:'absolute', bottom:0, left:0, right:0, zIndex:30, padding:'20px 28px 40px', background:'linear-gradient(to top,#000 20%,rgba(0,0,0,0.4) 80%,transparent 100%)' }}>
+        <div style={{ display:'flex', gap:8, marginBottom:18, overflowX:'auto' }}>
+          {['Z Energy','Officemax','Mojo'].map((m,i) => (
+            <div key={m} style={{ width:48, height:64, borderRadius:6, flexShrink:0, background:'#fff', boxShadow:'0 2px 6px rgba(0,0,0,0.3)', position:'relative', overflow:'hidden' }}>
+              <div style={{ position:'absolute', top:4, left:4, right:4, height:8, background:'#333', opacity:0.15 }}/>
+              <div style={{ position:'absolute', bottom:4, left:4, right:4, fontSize:7, fontFamily:FONTS.mono, fontWeight:700, color:'#333' }}>{m}</div>
+              {i===0 && <div style={{ position:'absolute', top:2, right:2, width:14, height:14, borderRadius:7, background:t.brand, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff' }}><Icon name="check" size={10}/></div>}
+            </div>
+          ))}
+          <div style={{ width:48, height:64, borderRadius:6, flexShrink:0, border:'1.5px dashed rgba(255,255,255,0.3)', display:'flex', alignItems:'center', justifyContent:'center', color:'rgba(255,255,255,0.5)' }}><Icon name="plus" size={16}/></div>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <button style={{ width:52, height:52, borderRadius:12, background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.2)', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+            <Icon name="gallery" size={22}/>
+          </button>
+          <button onClick={() => onNavigate?.('confirm')} style={{ width:76, height:76, borderRadius:38, background:'#fff', border:'4px solid rgba(255,255,255,0.3)', cursor:'pointer', padding:0, outline:'none', boxShadow:'0 4px 20px rgba(0,0,0,0.4), inset 0 0 0 4px #0a0d0f' }}/>
+          <button style={{ width:52, height:52, borderRadius:12, background:t.brand, border:'none', color:'#fff', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', cursor:'pointer', gap:1 }}>
+            <Icon name="sparkle" size={18}/>
+            <span style={{ fontSize:8, fontWeight:700, letterSpacing:0.3 }}>AUTO</span>
+          </button>
+        </div>
+      </div>
+    </Screen>
+  );
+}
+
+// ── Screen 3: Confirm ─────────────────────────────────────────────────────────
+function ConfirmScreen({ t, onNavigate }) {
+  const [category, setCategory] = useState('办公用品');
+  const [reclassifyAll, setReclassifyAll] = useState(false);
+  const [showCatPicker, setShowCatPicker] = useState(false);
+  const isDark = t===TOKENS.dark;
+  const items = [
+    {name:'A4 打印纸 80g × 2',price:27.80,native:'办公用品'},
+    {name:'HP 黑色墨盒',      price:64.90,native:'办公用品'},
+    {name:'订书机 + 钉',      price:12.50,native:'办公用品'},
+    {name:'Lindt 黑巧克力',   price:8.90, native:'餐饮'},
+    {name:'手机充电线',       price:13.73,native:'其他'},
+  ];
+  const subtotal = items.reduce((s,i) => s+i.price, 0);
+  const gst = +(subtotal*0.15/1.15).toFixed(2);
+  const mismatched = items.filter(i => i.native!==category).length;
+  return (
+    <Screen t={t}>
+      <ScreenStatusBar dark={isDark}/>
+      <div style={{ padding:'52px 16px 12px', background:t.surface, borderBottom:`1px solid ${t.border}`, display:'flex', alignItems:'center', gap:12 }}>
+        <button onClick={() => onNavigate?.('capture')} style={{ width:36, height:36, borderRadius:10, border:'none', background:t.surfaceMuted, color:t.textSecondary, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><Icon name="chevL" size={20}/></button>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:17, fontWeight:600, color:t.textPrimary, letterSpacing:-0.3 }}>确认小票</div>
+          <div style={{ fontSize:12, color:t.textTertiary, marginTop:1, display:'flex', alignItems:'center', gap:4 }}>
+            <Icon name="sparkle" size={11} color={t.brand}/>
+            <span>AI 识别置信度 <span style={{ color:t.success, fontWeight:600 }}>96%</span></span>
+          </div>
+        </div>
+        <button style={{ width:36, height:36, borderRadius:10, border:`1px solid ${t.border}`, background:t.surface, color:t.textSecondary, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><Icon name="edit" size={16}/></button>
+      </div>
+      <Body style={{ paddingBottom:100 }}>
+        <div style={{ padding:16, display:'flex', gap:14 }}>
+          <ReceiptThumb t={t} merchant="OFFICEMAX" amount="$127.83" width={96} height={130} rotate={-1.5}/>
+          <div style={{ flex:1, display:'flex', flexDirection:'column', justifyContent:'space-between', minWidth:0 }}>
+            <div>
+              <div style={{ fontSize:11, color:t.textTertiary, fontWeight:500, letterSpacing:0.3, textTransform:'uppercase' }}>商户</div>
+              <div style={{ fontSize:18, fontWeight:700, color:t.textPrimary, marginTop:2, letterSpacing:-0.3 }}>Officemax NZ</div>
+              <div style={{ fontSize:12, color:t.textSecondary, marginTop:2 }}>Wellington Lambton Quay</div>
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:t.textTertiary, fontWeight:500, letterSpacing:0.3, textTransform:'uppercase' }}>金额</div>
+              <div style={{ fontFamily:FONTS.num, fontSize:24, fontWeight:700, color:t.textPrimary, marginTop:2, letterSpacing:-0.5 }}>{nz(subtotal)}</div>
+              <div style={{ fontSize:11, color:t.textTertiary, marginTop:2 }}>含 GST {nz(gst)} · 2026-04-18 14:32</div>
+            </div>
+          </div>
+        </div>
+        <div style={{ padding:'0 16px', marginBottom:12 }}>
+          <Card t={t} pad={0}>
+            <div style={{ padding:14, display:'flex', alignItems:'center', gap:12 }}>
+              <CategoryDot cat={category} size={44}/>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:11, color:t.textTertiary, fontWeight:500, letterSpacing:0.3, textTransform:'uppercase' }}>AI 推荐分类</div>
+                <div style={{ fontSize:16, fontWeight:600, color:t.textPrimary, marginTop:1 }}>{category}</div>
+              </div>
+              <button onClick={() => setShowCatPicker(v => !v)} style={{ background:t.surfaceMuted, border:'none', color:t.brand, padding:'6px 12px', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>修改 <Icon name="chevD" size={12}/></button>
+            </div>
+            {showCatPicker && (
+              <div style={{ padding:'4px 10px 12px', display:'flex', flexWrap:'wrap', gap:6, borderTop:`1px solid ${t.divider}` }}>
+                {Object.keys(CAT_META).map(c => (
+                  <button key={c} onClick={() => { setCategory(c); setShowCatPicker(false); }} style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'6px 10px', borderRadius:999, border:`1px solid ${c===category?t.brand:t.border}`, background:c===category?t.brandSoft:t.surface, color:c===category?t.brandDeep:t.textPrimary, fontSize:12, fontWeight:600, cursor:'pointer', marginTop:8 }}>
+                    <span style={{ width:8, height:8, borderRadius:4, background:CAT_META[c].c }}/>
+                    {c}
+                  </button>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+        <div style={{ padding:'0 16px', marginBottom:12 }}>
+          <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', padding:'6px 4px 8px' }}>
+            <div style={{ fontSize:13, fontWeight:600, color:t.textPrimary }}>条目明细 <span style={{ color:t.textTertiary, fontWeight:500 }}>· {items.length} 项</span></div>
+            {mismatched>0 && !reclassifyAll && <div style={{ fontSize:11, color:t.accent, fontWeight:600, display:'flex', alignItems:'center', gap:4 }}><Icon name="info" size={11}/>{mismatched} 项类别不同</div>}
+          </div>
+          <Card t={t} pad={0}>
+            {items.map((item,i) => {
+              const effectiveCat = reclassifyAll ? category : item.native;
+              const mismatch = item.native!==category;
+              return (
+                <div key={i} style={{ padding:'10px 14px', borderTop:i===0?'none':`1px solid ${t.divider}`, display:'flex', alignItems:'center', gap:10, background:reclassifyAll&&mismatch?t.brandSoft+'66':'transparent', transition:'background 0.2s ease' }}>
+                  <div style={{ width:22, height:22, borderRadius:6, background:CAT_META[effectiveCat].c+'20', color:CAT_META[effectiveCat].c, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}><Icon name={CAT_META[effectiveCat].icon} size={12} strokeWidth={2}/></div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13.5, fontWeight:500, color:t.textPrimary }}>{item.name}</div>
+                    <div style={{ fontSize:11, color:t.textTertiary, marginTop:1, display:'flex', alignItems:'center', gap:5 }}>
+                      <span>归为 <span style={{ color:CAT_META[effectiveCat].c, fontWeight:600 }}>{effectiveCat}</span></span>
+                      {reclassifyAll&&mismatch && <span style={{ textDecoration:'line-through', opacity:0.5 }}>{item.native}</span>}
+                    </div>
+                  </div>
+                  <div style={{ fontFamily:FONTS.num, fontSize:14, fontWeight:600, color:t.textPrimary }}>{nz(item.price)}</div>
+                </div>
+              );
+            })}
+          </Card>
+        </div>
+        <div style={{ padding:'0 16px', marginBottom:12 }}>
+          <div style={{ background:reclassifyAll?`linear-gradient(135deg,${t.brandSoft},${t.surface})`:t.surface, border:`1px solid ${reclassifyAll?t.brand:t.border}`, borderRadius:14, padding:14, display:'flex', alignItems:'flex-start', gap:12, transition:'all 0.25s ease', boxShadow:reclassifyAll?`0 0 0 3px ${t.brandSoft}`:'none' }}>
+            <div style={{ width:36, height:36, borderRadius:10, background:reclassifyAll?t.brand:t.surfaceMuted, color:reclassifyAll?'#fff':t.brandDeep, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all 0.25s ease' }}><Icon name="merge" size={18} strokeWidth={2}/></div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:14, fontWeight:600, color:t.textPrimary }}>整张小票全部归为「{category}」</div>
+              <div style={{ fontSize:12, color:t.textSecondary, marginTop:3, lineHeight:1.5 }}>将所有条目（含零食、配件等）一并计入「{category}」。适用于统一采购或混合报销。</div>
+            </div>
+            <button onClick={() => setReclassifyAll(v => !v)} style={{ width:44, height:26, borderRadius:13, background:reclassifyAll?t.brand:t.borderStrong, border:'none', cursor:'pointer', padding:0, position:'relative', flexShrink:0, marginTop:2 }}>
+              <span style={{ position:'absolute', top:3, left:reclassifyAll?21:3, width:20, height:20, borderRadius:10, background:'#fff', boxShadow:'0 2px 4px rgba(0,0,0,0.2)', transition:'left 0.25s ease' }}/>
+            </button>
+          </div>
+        </div>
+        <div style={{ padding:'0 16px' }}>
+          <Card t={t} pad={14}>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:t.textSecondary, marginBottom:6 }}><span>小计（不含 GST）</span><span style={{ fontFamily:FONTS.num }}>{nz(subtotal-gst)}</span></div>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:t.textSecondary, marginBottom:10 }}><span>GST 15%</span><span style={{ fontFamily:FONTS.num }}>{nz(gst)}</span></div>
+            <div style={{ paddingTop:10, borderTop:`1px solid ${t.divider}`, display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
+              <span style={{ fontSize:14, fontWeight:600, color:t.textPrimary }}>合计</span>
+              <span style={{ fontFamily:FONTS.num, fontSize:20, fontWeight:700, color:t.textPrimary }}>{nz(subtotal)}</span>
+            </div>
+          </Card>
+        </div>
+      </Body>
+      <div style={{ position:'absolute', bottom:0, left:0, right:0, zIndex:40, background:t.surface+'F2', backdropFilter:'blur(18px)', WebkitBackdropFilter:'blur(18px)', borderTop:`1px solid ${t.border}`, padding:'12px 16px 28px', display:'flex', gap:10 }}>
+        <Button t={t} variant="secondary" size="lg" onClick={() => onNavigate?.('list')}>保存草稿</Button>
+        <Button t={t} variant="primary" size="lg" block iconRight="check" onClick={() => onNavigate?.('list')}>确认保存</Button>
+      </div>
+    </Screen>
+  );
+}
+
+// ── Screen 4: List ────────────────────────────────────────────────────────────
+function ListScreen({ t, onNavigate }) {
+  const [view, setView] = useState('list');
+  const [filter, setFilter] = useState('all');
+  const isDark = t===TOKENS.dark;
+  const groups = [
+    { date:'今天 · 4月 21', total:146.33, items:[
+      {merchant:'Officemax NZ',cat:'办公用品',amount:127.83,time:'14:32',status:'review',items:5,gst:16.67},
+      {merchant:'Caltex',cat:'交通',amount:18.50,time:'09:12',status:'ok',items:1,gst:2.41},
+    ]},
+    { date:'昨天 · 4月 20', total:331.82, items:[
+      {merchant:'Air New Zealand',cat:'差旅',amount:289.00,time:'19:05',status:'ok',items:1,gst:37.70},
+      {merchant:'Mojo Coffee',cat:'餐饮',amount:18.50,time:'08:40',status:'ok',items:2,gst:2.41},
+      {merchant:'Spark Mobile',cat:'通讯',amount:24.32,time:'08:22',status:'ok',items:1,gst:3.17},
+    ]},
+    { date:'4月 18 周六', total:72.40, items:[
+      {merchant:'Z Energy',cat:'交通',amount:72.40,time:'17:45',status:'sync',items:1,gst:9.44},
+    ]},
+  ];
+  const statusLabel = { ok:{text:'已记录',tone:'success'}, review:{text:'待审核',tone:'warn'}, sync:{text:'同步中',tone:'brand'} };
+  return (
+    <Screen t={t}>
+      <ScreenStatusBar dark={isDark}/>
+      <div style={{ padding:'52px 16px 0', background:t.surface, borderBottom:`1px solid ${t.border}` }}>
+        <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom:12 }}>
+          <div>
+            <div style={{ fontSize:12, color:t.textTertiary, fontWeight:500, letterSpacing:0.3, textTransform:'uppercase' }}>4月 · 共 23 张</div>
+            <div style={{ fontSize:22, fontWeight:700, color:t.textPrimary, letterSpacing:-0.4, marginTop:2 }}>小票</div>
+          </div>
+          <div style={{ display:'flex', gap:6 }}>
+            <button onClick={() => setView(v => v==='list'?'grid':'list')} style={{ width:36, height:36, borderRadius:10, border:`1px solid ${t.border}`, background:t.surface, color:t.textSecondary, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><Icon name={view==='list'?'grid':'list'} size={17}/></button>
+            <button style={{ width:36, height:36, borderRadius:10, border:`1px solid ${t.border}`, background:t.surface, color:t.textSecondary, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><Icon name="filter" size={17}/></button>
+          </div>
+        </div>
+        <div style={{ background:t.surfaceMuted, borderRadius:10, padding:'8px 12px', display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+          <Icon name="search" size={16} color={t.textTertiary}/>
+          <div style={{ color:t.textTertiary, fontSize:14 }}>搜索商户、金额、分类…</div>
+        </div>
+        <div style={{ display:'flex', gap:6, overflowX:'auto', paddingBottom:12 }}>
+          {[{id:'all',label:'全部',count:23},{id:'review',label:'待审核',count:2},{id:'gst',label:'含 GST',count:21},{id:'office',label:'办公用品',count:8},{id:'travel',label:'差旅',count:4}].map(f => {
+            const active=filter===f.id;
+            return <button key={f.id} onClick={() => setFilter(f.id)} style={{ padding:'6px 12px', borderRadius:999, whiteSpace:'nowrap', border:`1px solid ${active?t.brand:t.border}`, background:active?t.brand:t.surface, color:active?'#fff':t.textSecondary, fontSize:13, fontWeight:600, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5, flexShrink:0 }}>
+              {f.label}
+              <span style={{ background:active?'rgba(255,255,255,0.25)':t.surfaceMuted, color:active?'#fff':t.textTertiary, padding:'0 6px', borderRadius:999, fontSize:11, fontWeight:700 }}>{f.count}</span>
+            </button>;
+          })}
+        </div>
+      </div>
+      <Body style={{ paddingBottom:100 }}>
+        <div style={{ padding:'14px 16px 4px' }}>
+          <div style={{ display:'flex', gap:10 }}>
+            {[{label:'本月总支出',val:nz(2847.32),tone:t.textPrimary},{label:'待抵扣 GST',val:nz(371.39),tone:t.brand},{label:'可报销',val:nz(1928.44),tone:t.accent}].map(s => (
+              <div key={s.label} style={{ flex:1, background:t.surface, border:`1px solid ${t.border}`, borderRadius:12, padding:10 }}>
+                <div style={{ fontSize:10.5, color:t.textTertiary, fontWeight:500 }}>{s.label}</div>
+                <div style={{ fontFamily:FONTS.num, fontSize:15, fontWeight:700, color:s.tone, letterSpacing:-0.3, marginTop:2 }}>{s.val}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        {groups.map((g,gi) => (
+          <div key={gi} style={{ padding:'14px 16px 0' }}>
+            <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', padding:'0 4px 8px' }}>
+              <div style={{ fontSize:12, fontWeight:600, color:t.textTertiary, letterSpacing:0.3, textTransform:'uppercase' }}>{g.date}</div>
+              <div style={{ fontFamily:FONTS.num, fontSize:12, fontWeight:600, color:t.textSecondary }}>{nz(g.total)}</div>
+            </div>
+            <Card t={t} pad={0}>
+              {g.items.map((r,i) => {
+                const s=statusLabel[r.status];
+                return (
+                  <div key={i} onClick={() => gi===0&&i===0?onNavigate?.('detail'):gi===0&&i===0?null:null} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', cursor:'pointer', borderTop:i===0?'none':`1px solid ${t.divider}` }}
+                    onClick={() => { if(gi===0&&i===0) onNavigate?.('detail'); }}>
+                    <CategoryDot cat={r.cat} size={40}/>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                        <span style={{ fontSize:14.5, fontWeight:600, color:t.textPrimary }}>{r.merchant}</span>
+                        <Chip t={t} label={s.text} tone={s.tone} size="sm"/>
+                      </div>
+                      <div style={{ fontSize:12, color:t.textTertiary, marginTop:2, display:'flex', gap:6 }}>
+                        <span>{r.cat}</span><span>·</span><span>{r.time}</span><span>·</span><span>{r.items} 项</span><span>·</span><span>GST {nz(r.gst)}</span>
+                      </div>
+                    </div>
+                    <div style={{ textAlign:'right' }}>
+                      <div style={{ fontFamily:FONTS.num, fontSize:15, fontWeight:700, color:t.textPrimary }}>{nz(r.amount)}</div>
+                      <Icon name="chevR" size={14} color={t.textTertiary}/>
+                    </div>
+                  </div>
+                );
+              })}
+            </Card>
+          </div>
+        ))}
+        <div style={{ textAlign:'center', padding:'24px 16px', fontSize:12, color:t.textTertiary }}>— 加载更早记录 —</div>
+      </Body>
+      <TabBar t={t} current="list" onChange={onNavigate}/>
+    </Screen>
+  );
+}
+
+// ── Screen 5: Report ──────────────────────────────────────────────────────────
+function ReportScreen({ t, onNavigate }) {
+  const isDark = t===TOKENS.dark;
+  const totalPurchases=2847.32, gstOnPurchases=371.39;
+  const byCat = [
+    {cat:'办公用品',gross:842.10,gst:109.84,claim:true,count:8},
+    {cat:'交通',gross:612.55,gst:79.90,claim:true,count:7},
+    {cat:'差旅',gross:589.40,gst:76.88,claim:true,count:4},
+    {cat:'餐饮',gross:487.22,gst:63.55,claim:false,count:6},
+    {cat:'通讯',gross:316.05,gst:41.22,claim:true,count:3},
+  ];
+  const claimable = byCat.filter(c => c.claim).reduce((s,c) => s+c.gst, 0);
+  return (
+    <Screen t={t}>
+      <ScreenStatusBar dark={isDark}/>
+      <div style={{ padding:'52px 16px 14px', background:t.surface, borderBottom:`1px solid ${t.border}`, display:'flex', alignItems:'flex-end', justifyContent:'space-between' }}>
+        <div>
+          <div style={{ fontSize:12, color:t.textTertiary, fontWeight:500, letterSpacing:0.3, textTransform:'uppercase' }}>税务表格</div>
+          <div style={{ fontSize:22, fontWeight:700, color:t.textPrimary, letterSpacing:-0.4, marginTop:2 }}>GST 申报预览</div>
+        </div>
+        <button style={{ width:36, height:36, borderRadius:10, border:`1px solid ${t.border}`, background:t.surface, color:t.textSecondary, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><Icon name="calendar" size={17}/></button>
+      </div>
+      <Body style={{ paddingBottom:180 }}>
+        <div style={{ padding:'12px 16px 8px' }}>
+          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:12, padding:14, display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ width:40, height:40, borderRadius:10, background:t.brandSoft, color:t.brandDeep, display:'flex', alignItems:'center', justifyContent:'center' }}><Icon name="shield" size={19}/></div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:13, color:t.textTertiary, fontWeight:500 }}>申报周期</div>
+              <div style={{ fontSize:15, fontWeight:600, color:t.textPrimary, letterSpacing:-0.2, marginTop:1 }}>2026-02 / 2026-03 · 双月</div>
+            </div>
+            <button style={{ background:'none', border:'none', color:t.brand, fontSize:13, fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', gap:2 }}>切换 <Icon name="chevR" size={12}/></button>
+          </div>
+        </div>
+        <div style={{ padding:'8px 16px 0' }}>
+          <div style={{ background:t.surface, borderRadius:16, overflow:'hidden', border:`1px solid ${t.border}`, boxShadow:t.shadowCard }}>
+            <div style={{ padding:'16px 18px 14px', background:`linear-gradient(135deg,${t.brandDeep},${t.brand})`, color:'#fff' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                <div>
+                  <div style={{ fontSize:11, fontWeight:600, opacity:0.75, letterSpacing:0.5, textTransform:'uppercase' }}>Inland Revenue — NZ</div>
+                  <div style={{ fontSize:17, fontWeight:700, letterSpacing:-0.2, marginTop:2 }}>GST 101A — 申报表</div>
+                </div>
+                <span style={{ background:'rgba(255,255,255,0.2)', color:'#fff', padding:'2px 8px', borderRadius:999, fontSize:12, fontWeight:600, display:'inline-flex', alignItems:'center', gap:4 }}><Icon name="edit" size={12}/>草稿</span>
+              </div>
+            </div>
+            <div>
+              {[
+                {box:'Box 5', label:'销售总额（含 GST）',    val:0,               muted:true},
+                {box:'Box 8', label:'采购总额（含 GST）',    val:totalPurchases},
+                {box:'Box 11',label:'GST 销项税额',          val:0,               muted:true},
+                {box:'Box 12',label:'GST 进项税额（可抵扣）',val:claimable,        highlight:true},
+              ].map((b,i) => (
+                <div key={i} style={{ padding:'12px 18px', borderTop:i===0?'none':`1px solid ${t.divider}`, display:'flex', alignItems:'center', gap:12, background:b.highlight?t.brandSoft+'55':'transparent' }}>
+                  <div style={{ fontFamily:FONTS.mono, fontSize:10, fontWeight:700, color:t.textTertiary, width:44, letterSpacing:0.3 }}>{b.box}</div>
+                  <div style={{ flex:1, fontSize:13, fontWeight:500, color:b.muted?t.textTertiary:t.textPrimary }}>{b.label}</div>
+                  <div style={{ fontFamily:FONTS.num, fontSize:15, fontWeight:700, color:b.highlight?t.brandDeep:b.muted?t.textTertiary:t.textPrimary }}>{nz(b.val)}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ background:t.surfaceMuted, padding:'14px 18px', display:'flex', alignItems:'center', justifyContent:'space-between', borderTop:`1px solid ${t.border}` }}>
+              <div>
+                <div style={{ fontSize:11, fontWeight:600, color:t.success, letterSpacing:0.5, textTransform:'uppercase' }}>Box 15 · 退税金额</div>
+                <div style={{ fontSize:12, color:t.textTertiary, marginTop:2 }}>IRD 将退款至您的账户</div>
+              </div>
+              <div style={{ fontFamily:FONTS.num, fontSize:24, fontWeight:700, color:t.success, letterSpacing:-0.5 }}>+{nz(gstOnPurchases)}</div>
+            </div>
+          </div>
+        </div>
+        <div style={{ padding:'16px 16px 8px' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', padding:'0 4px 10px' }}>
+            <div style={{ fontSize:13, fontWeight:600, color:t.textPrimary }}>抵扣明细</div>
+            <div style={{ fontSize:11, color:t.textTertiary, fontWeight:500 }}>餐饮不可抵扣</div>
+          </div>
+          <Card t={t} pad={0}>
+            <div style={{ padding:'8px 14px 10px', display:'grid', gridTemplateColumns:'24px 1fr 70px 60px', gap:10, fontSize:10, fontWeight:600, color:t.textTertiary, letterSpacing:0.3, textTransform:'uppercase', borderBottom:`1px solid ${t.divider}` }}>
+              <div/><div>分类</div><div style={{ textAlign:'right' }}>含税</div><div style={{ textAlign:'right' }}>GST</div>
+            </div>
+            {byCat.map((c,i) => (
+              <div key={i} style={{ padding:'10px 14px', borderTop:i===0?'none':`1px solid ${t.divider}`, display:'grid', gridTemplateColumns:'24px 1fr 70px 60px', gap:10, alignItems:'center', opacity:c.claim?1:0.55 }}>
+                <div style={{ width:20, height:20, borderRadius:5, background:CAT_META[c.cat].c+'25', color:CAT_META[c.cat].c, display:'flex', alignItems:'center', justifyContent:'center' }}><Icon name={CAT_META[c.cat].icon} size={11} strokeWidth={2}/></div>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:600, color:t.textPrimary }}>{c.cat}</div>
+                  <div style={{ fontSize:10.5, color:t.textTertiary, marginTop:1 }}>{c.count} 张{!c.claim&&' · 不可抵'}</div>
+                </div>
+                <div style={{ fontFamily:FONTS.num, fontSize:13, fontWeight:500, color:t.textSecondary, textAlign:'right' }}>{nz(c.gross)}</div>
+                <div style={{ fontFamily:FONTS.num, fontSize:13, fontWeight:700, color:c.claim?t.brandDeep:t.textTertiary, textAlign:'right', textDecoration:c.claim?'none':'line-through' }}>{nz(c.gst)}</div>
+              </div>
+            ))}
+            <div style={{ padding:'11px 14px', borderTop:`1px solid ${t.border}`, display:'grid', gridTemplateColumns:'24px 1fr 70px 60px', gap:10, background:t.surfaceMuted }}>
+              <div/><div style={{ fontSize:12, fontWeight:700, color:t.textPrimary }}>可抵扣合计</div><div/>
+              <div style={{ fontFamily:FONTS.num, fontSize:14, fontWeight:700, color:t.brandDeep, textAlign:'right' }}>{nz(claimable)}</div>
+            </div>
+          </Card>
+        </div>
+        <div style={{ padding:'12px 16px 0' }}>
+          <div style={{ fontSize:13, fontWeight:600, color:t.textPrimary, padding:'0 4px 10px' }}>导出格式</div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:10 }}>
+            {[
+              {title:'GST 101 PDF',sub:'官方申报模板',icon:'shield',hot:true},
+              {title:'CSV 明细表',sub:'Excel 可打开',icon:'list'},
+              {title:'Xero 导入',sub:'.xlsx 会计软件',icon:'folder'},
+              {title:'邮件给会计',sub:'包含附件+PDF',icon:'send'},
+            ].map((f,i) => (
+              <button key={i} style={{ background:t.surface, border:`1px solid ${f.hot?t.brand:t.border}`, borderRadius:12, padding:12, textAlign:'left', cursor:'pointer', display:'flex', flexDirection:'column', gap:4, position:'relative' }}>
+                {f.hot && <div style={{ position:'absolute', top:8, right:8, fontSize:9, fontWeight:700, color:t.brand, background:t.brandSoft, padding:'2px 6px', borderRadius:4 }}>推荐</div>}
+                <div style={{ width:30, height:30, borderRadius:8, background:f.hot?t.brand:t.surfaceMuted, color:f.hot?'#fff':t.textSecondary, display:'flex', alignItems:'center', justifyContent:'center' }}><Icon name={f.icon} size={15}/></div>
+                <div style={{ fontSize:13, fontWeight:600, color:t.textPrimary, marginTop:4 }}>{f.title}</div>
+                <div style={{ fontSize:11, color:t.textTertiary }}>{f.sub}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </Body>
+      <div style={{ position:'absolute', bottom:80, left:0, right:0, zIndex:40, padding:'0 16px' }}>
+        <Button t={t} variant="primary" size="lg" block icon="download">导出并发送至会计</Button>
+      </div>
+      <TabBar t={t} current="report" onChange={onNavigate}/>
+    </Screen>
+  );
+}
+
+// ── Screen 6: Detail ──────────────────────────────────────────────────────────
+function DetailScreen({ t, onNavigate }) {
+  const [tab, setTab] = useState('info');
+  const isDark = t===TOKENS.dark;
+  const receipt = { merchant:'Officemax NZ', location:'Wellington · Lambton Quay', total:127.83, gst:16.67, net:111.16, date:'2026-04-18', time:'14:32', paid:'EFTPOS Card · **** 4829', invoiceNo:'INV-2026-447293', category:'办公用品', claim:true };
+  const items = [{name:'A4 打印纸 80g × 2',price:27.80},{name:'HP 黑色墨盒',price:64.90},{name:'订书机 + 钉',price:12.50},{name:'Lindt 黑巧克力',price:8.90},{name:'手机充电线',price:13.73}];
+  const history = [
+    {at:'4月 21 · 10:42',who:'刘伟',act:'修改分类',detail:'差旅 → 办公用品'},
+    {at:'4月 18 · 14:33',who:'AI',  act:'自动识别',detail:'置信度 96% · 5 项条目'},
+    {at:'4月 18 · 14:32',who:'刘伟',act:'上传小票',detail:'单张拍摄 · 2.3MB'},
+  ];
+  return (
+    <Screen t={t}>
+      <ScreenStatusBar dark={isDark}/>
+      <div style={{ padding:'52px 16px 12px', background:t.surface, borderBottom:`1px solid ${t.border}`, display:'flex', alignItems:'center', gap:10 }}>
+        <button onClick={() => onNavigate?.('list')} style={{ width:36, height:36, borderRadius:10, border:'none', background:t.surfaceMuted, color:t.textSecondary, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><Icon name="chevL" size={20}/></button>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:16, fontWeight:600, color:t.textPrimary, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{receipt.merchant}</div>
+          <div style={{ fontSize:11, color:t.textTertiary, marginTop:1 }}>{receipt.invoiceNo}</div>
+        </div>
+        <button style={{ width:36, height:36, borderRadius:10, border:`1px solid ${t.border}`, background:t.surface, color:t.textSecondary, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><Icon name="download" size={17}/></button>
+        <button style={{ width:36, height:36, borderRadius:10, border:`1px solid ${t.border}`, background:t.surface, color:t.textSecondary, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><Icon name="edit" size={16}/></button>
+      </div>
+      <Body style={{ paddingBottom:100 }}>
+        <div style={{ padding:'20px 16px 16px', background:`linear-gradient(180deg,${t.surface} 0%,${t.appBg} 100%)`, borderBottom:`1px solid ${t.border}` }}>
+          <div style={{ display:'flex', justifyContent:'center', marginBottom:16 }}><ReceiptThumb t={t} merchant="OFFICEMAX" amount={nz(receipt.total)} width={150} height={210} rotate={-2.5}/></div>
+          <div style={{ textAlign:'center' }}>
+            <div style={{ fontFamily:FONTS.num, fontSize:34, fontWeight:700, color:t.textPrimary, letterSpacing:-1 }}>{nz(receipt.total)}</div>
+            <div style={{ display:'inline-flex', gap:8, alignItems:'center', marginTop:8 }}>
+              <CategoryDot cat={receipt.category} size={20}/>
+              <span style={{ fontSize:13, fontWeight:600, color:t.textSecondary }}>{receipt.category}</span>
+              <span style={{ width:3, height:3, borderRadius:2, background:t.textTertiary }}/>
+              <Chip t={t} label="已记录" tone="success" size="sm" icon="check"/>
+              {receipt.claim && <Chip t={t} label="可抵 GST" tone="brand" size="sm"/>}
+            </div>
+          </div>
+        </div>
+        <div style={{ padding:'14px 16px 0' }}>
+          <div style={{ display:'flex', background:t.surfaceMuted, borderRadius:10, padding:3 }}>
+            {[{id:'info',label:'信息'},{id:'photo',label:'原图'},{id:'history',label:'修改记录'}].map(tb => (
+              <button key={tb.id} onClick={() => setTab(tb.id)} style={{ flex:1, padding:'7px 0', borderRadius:8, border:'none', background:tab===tb.id?t.surface:'transparent', color:tab===tb.id?t.textPrimary:t.textSecondary, fontSize:13, fontWeight:600, cursor:'pointer', boxShadow:tab===tb.id?'0 1px 2px rgba(0,0,0,0.08)':'none' }}>{tb.label}</button>
+            ))}
+          </div>
+        </div>
+        {tab==='info' && <>
+          <div style={{ padding:'14px 16px 0' }}>
+            <Card t={t} pad={0}>
+              {[['商户',receipt.merchant],['地点',receipt.location],['日期',`${receipt.date} · ${receipt.time}`],['支付',receipt.paid],['发票号',receipt.invoiceNo],['GST 号','123-456-789']].map(([k,v],i) => (
+                <div key={k} style={{ padding:'11px 14px', borderTop:i===0?'none':`1px solid ${t.divider}`, display:'flex', alignItems:'center', gap:12 }}>
+                  <div style={{ fontSize:12, color:t.textTertiary, width:64, fontWeight:500 }}>{k}</div>
+                  <div style={{ fontSize:13.5, color:t.textPrimary, fontWeight:500, flex:1, textAlign:'right' }}>{v}</div>
+                </div>
+              ))}
+            </Card>
+          </div>
+          <div style={{ padding:'14px 16px 0' }}>
+            <div style={{ fontSize:13, fontWeight:600, color:t.textPrimary, padding:'0 4px 8px' }}>条目 · {items.length} 项</div>
+            <Card t={t} pad={0}>
+              {items.map((it,i) => (
+                <div key={i} style={{ padding:'10px 14px', borderTop:i===0?'none':`1px solid ${t.divider}`, display:'flex', alignItems:'center', gap:10 }}>
+                  <div style={{ width:20, fontSize:11, color:t.textTertiary, fontFamily:FONTS.num, fontWeight:600 }}>{String(i+1).padStart(2,'0')}</div>
+                  <div style={{ flex:1, fontSize:13.5, color:t.textPrimary, fontWeight:500 }}>{it.name}</div>
+                  <div style={{ fontFamily:FONTS.num, fontSize:13.5, fontWeight:600, color:t.textPrimary }}>{nz(it.price)}</div>
+                </div>
+              ))}
+              <div style={{ padding:'11px 14px', borderTop:`1px solid ${t.border}`, background:t.surfaceMuted }}>
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:t.textSecondary, marginBottom:4 }}><span>不含 GST</span><span style={{ fontFamily:FONTS.num }}>{nz(receipt.net)}</span></div>
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:t.textSecondary, marginBottom:6 }}><span>GST 15%</span><span style={{ fontFamily:FONTS.num }}>{nz(receipt.gst)}</span></div>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
+                  <span style={{ fontSize:13, fontWeight:600, color:t.textPrimary }}>合计</span>
+                  <span style={{ fontFamily:FONTS.num, fontSize:16, fontWeight:700, color:t.textPrimary }}>{nz(receipt.total)}</span>
+                </div>
+              </div>
+            </Card>
+          </div>
+          <div style={{ padding:'14px 16px 0' }}>
+            <Card t={t} pad={14}>
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+                <Icon name="sparkle" size={14} color={t.brand}/>
+                <div style={{ fontSize:13, fontWeight:600, color:t.textPrimary }}>AI 原始识别</div>
+                <Chip t={t} label="与当前一致" tone="success" size="sm" icon="check"/>
+              </div>
+              <div style={{ fontSize:12, color:t.textSecondary, lineHeight:1.6 }}>5 项条目 · 金额 $127.83 · 日期 2026-04-18 14:32 · 置信度 96%。<span style={{ color:t.brand, fontWeight:600 }}>查看原始文本 →</span></div>
+            </Card>
+          </div>
+        </>}
+        {tab==='photo' && (
+          <div style={{ padding:'14px 16px 0' }}>
+            <div style={{ background:'#1a1a1a', borderRadius:14, padding:30, display:'flex', justifyContent:'center', alignItems:'center', minHeight:360 }}>
+              <ReceiptThumb t={t} merchant="OFFICEMAX" amount={nz(receipt.total)} width={240} height={330}/>
+            </div>
+            <div style={{ display:'flex', gap:8, justifyContent:'center', marginTop:14, fontSize:12, color:t.textTertiary }}>
+              <span>2.3 MB</span><span>·</span><span>1920 × 2640</span><span>·</span>
+              <button style={{ background:'none', border:'none', color:t.brand, cursor:'pointer', fontSize:12, fontWeight:600, padding:0 }}>添加第二张 +</button>
+            </div>
+          </div>
+        )}
+        {tab==='history' && (
+          <div style={{ padding:'14px 16px 0' }}>
+            <Card t={t} pad={0}>
+              {history.map((h,i) => (
+                <div key={i} style={{ padding:'14px', display:'flex', gap:12, borderTop:i===0?'none':`1px solid ${t.divider}` }}>
+                  <div style={{ width:28, height:28, borderRadius:8, flexShrink:0, background:h.who==='AI'?t.brandSoft:t.surfaceMuted, color:h.who==='AI'?t.brandDeep:t.textSecondary, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, fontFamily:FONTS.num }}>
+                    {h.who==='AI'?<Icon name="sparkle" size={14}/>:'LW'}
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:13.5, fontWeight:600, color:t.textPrimary }}>{h.who==='AI'?'AI 助手':h.who}<span style={{ color:t.textTertiary, fontWeight:500, marginLeft:6 }}>{h.act}</span></div>
+                    <div style={{ fontSize:12, color:t.textSecondary, marginTop:3 }}>{h.detail}</div>
+                    <div style={{ fontSize:11, color:t.textTertiary, marginTop:4, fontFamily:FONTS.mono }}>{h.at}</div>
+                  </div>
+                </div>
+              ))}
+            </Card>
+          </div>
+        )}
+      </Body>
+      <div style={{ position:'absolute', bottom:0, left:0, right:0, zIndex:40, background:t.surface+'F2', backdropFilter:'blur(18px)', WebkitBackdropFilter:'blur(18px)', borderTop:`1px solid ${t.border}`, padding:'10px 16px 28px', display:'flex', gap:8 }}>
+        <Button t={t} variant="secondary" size="md" icon="send" style={{ flex:1 }}>发送</Button>
+        <Button t={t} variant="secondary" size="md" icon="folder" style={{ flex:1 }}>移动</Button>
+        <Button t={t} variant="primary" size="md" icon="check" style={{ flex:1 }}>标记完成</Button>
+      </div>
+    </Screen>
+  );
+}
+
+// ── Screen 7: Settings ────────────────────────────────────────────────────────
+function SettingsScreen({ t, onNavigate }) {
+  const isDark = t===TOKENS.dark;
+  const Row = ({ icon, iconBg, iconColor, title, detail, toggle, last, danger }) => (
+    <div style={{ display:'flex', alignItems:'center', gap:12, padding:'11px 14px', cursor:'pointer', borderTop:last==='first'?'none':`1px solid ${t.divider}` }}>
+      {icon && <div style={{ width:28, height:28, borderRadius:7, flexShrink:0, background:iconBg||t.surfaceMuted, color:iconColor||t.textSecondary, display:'flex', alignItems:'center', justifyContent:'center' }}><Icon name={icon} size={15} strokeWidth={1.9}/></div>}
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ fontSize:14, fontWeight:500, color:danger?t.danger:t.textPrimary }}>{title}</div>
+        {detail && typeof detail==='string' && <div style={{ fontSize:11.5, color:t.textTertiary, marginTop:1 }}>{detail}</div>}
+      </div>
+      {typeof detail!=='string' && detail}
+      {toggle!==undefined ? (
+        <div style={{ width:40, height:24, borderRadius:12, background:toggle?t.brand:t.borderStrong, position:'relative', flexShrink:0 }}>
+          <span style={{ position:'absolute', top:2, left:toggle?18:2, width:20, height:20, borderRadius:10, background:'#fff', boxShadow:'0 1px 2px rgba(0,0,0,0.2)' }}/>
+        </div>
+      ) : !danger && <Icon name="chevR" size={14} color={t.textTertiary}/>}
+    </div>
+  );
+  const SH = ({ children }) => <div style={{ fontSize:11, fontWeight:600, color:t.textTertiary, letterSpacing:0.5, textTransform:'uppercase', padding:'18px 20px 8px' }}>{children}</div>;
+  return (
+    <Screen t={t}>
+      <ScreenStatusBar dark={isDark}/>
+      <div style={{ padding:'52px 16px 14px', background:t.surface, borderBottom:`1px solid ${t.border}` }}>
+        <div style={{ fontSize:22, fontWeight:700, color:t.textPrimary, letterSpacing:-0.4 }}>设置</div>
+      </div>
+      <Body style={{ paddingBottom:100 }}>
+        <div style={{ padding:'14px 16px 0' }}>
+          <Card t={t} pad={16}>
+            <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+              <div style={{ width:52, height:52, borderRadius:26, background:`linear-gradient(135deg,${t.brand},${t.brandDeep})`, color:'#fff', fontWeight:700, fontSize:18, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:FONTS.num }}>LW</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:16, fontWeight:600, color:t.textPrimary }}>刘伟</div>
+                <div style={{ fontSize:12, color:t.textTertiary, marginTop:2 }}>liu.wei@email.com · 个人理财</div>
+              </div>
+              <Chip t={t} label="Pro" tone="accent" size="sm" icon="spark"/>
+            </div>
+            <div style={{ display:'flex', gap:8, marginTop:14, paddingTop:14, borderTop:`1px solid ${t.divider}` }}>
+              {[{k:'23',l:'本月小票'},{k:nz(2847),l:'累计金额'},{k:nz(371),l:'待退税'}].map((s,i) => (
+                <div key={i} style={{ flex:1, textAlign:'center' }}>
+                  <div style={{ fontFamily:FONTS.num, fontSize:15, fontWeight:700, color:t.textPrimary }}>{s.k}</div>
+                  <div style={{ fontSize:10.5, color:t.textTertiary, marginTop:2, fontWeight:500 }}>{s.l}</div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+        <SH>税务信息</SH>
+        <div style={{ padding:'0 16px' }}>
+          <Card t={t} pad={0}>
+            <Row last="first" icon="shield" iconBg={t.brandSoft} iconColor={t.brandDeep} title="IRD GST 注册号" detail="123-456-789"/>
+            <Row icon="calendar" iconBg="rgba(123,97,255,0.14)" iconColor="#7B61FF" title="申报周期" detail="双月 · 2/4/6/8/10/12 月"/>
+            <Row icon="wand" iconBg={t.accentSoft} iconColor={t.accent} title="自动提交到 IRD" toggle={false} detail="申报日前需本人确认"/>
+            <Row icon="bell" iconBg={t.successSoft} iconColor={t.success} title="申报截止提醒" toggle={true} detail="提前 7 天与 1 天各一次"/>
+          </Card>
+        </div>
+        <SH>分类与规则</SH>
+        <div style={{ padding:'0 16px' }}>
+          <Card t={t} pad={0}>
+            <Row last="first" icon="tag" iconBg={t.surfaceMuted} iconColor={t.textSecondary} title="管理分类" detail="7 个默认 · 0 个自定义"/>
+            <Row icon="merge" iconBg={t.brandSoft} iconColor={t.brandDeep} title="商户自动映射" detail="12 条规则 · 例如 Mojo → 餐饮"/>
+            <Row icon="wand" iconBg={t.accentSoft} iconColor={t.accent} title="AI 智能分类" toggle={true} detail="首次上传后学习您的习惯"/>
+          </Card>
+        </div>
+        <SH>会计师 / 共享</SH>
+        <div style={{ padding:'0 16px' }}>
+          <Card t={t} pad={0}>
+            <Row last="first" icon="user" iconBg="rgba(61,140,245,0.14)" iconColor="#3D8CF5" title="我的会计师" detail={<div style={{ textAlign:'right', marginRight:8 }}><div style={{ fontSize:13, fontWeight:500, color:t.textPrimary }}>Sarah Chen</div><div style={{ fontSize:11, color:t.textTertiary }}>BDO Wellington</div></div>}/>
+            <Row icon="send" iconBg={t.surfaceMuted} iconColor={t.textSecondary} title="自动月末发送" toggle={true} detail="每月 1 号 09:00 · PDF + CSV"/>
+            <Row icon="folder" iconBg={t.surfaceMuted} iconColor={t.textSecondary} title="共享空间" detail="未启用"/>
+          </Card>
+        </div>
+        <SH>数据与备份</SH>
+        <div style={{ padding:'0 16px' }}>
+          <Card t={t} pad={0}>
+            <Row last="first" icon="lock" iconBg={t.successSoft} iconColor={t.success} title="iCloud 同步" toggle={true} detail="上次同步 · 5 分钟前"/>
+            <Row icon="download" iconBg={t.surfaceMuted} iconColor={t.textSecondary} title="导出全部数据" detail="CSV · JSON · PDF"/>
+            <Row icon="shield" iconBg={t.surfaceMuted} iconColor={t.textSecondary} title="法定保留 7 年" detail="NZ IRD 要求 · 已保存 247 张"/>
+          </Card>
+        </div>
+        <SH>关于</SH>
+        <div style={{ padding:'0 16px' }}>
+          <Card t={t} pad={0}>
+            <Row last="first" icon="info" title="帮助中心"/>
+            <Row icon="info" title="隐私政策"/>
+            <Row icon="info" title="版本" detail="2.4.1 (build 268)"/>
+          </Card>
+        </div>
+        <div style={{ padding:'18px 16px 0' }}>
+          <Card t={t} pad={0}>
+            <div style={{ padding:'13px 14px', textAlign:'center', fontSize:14, fontWeight:600, color:t.danger, cursor:'pointer' }}>退出登录</div>
+          </Card>
+        </div>
+        <div style={{ textAlign:'center', padding:'24px 0 14px', fontSize:11, color:t.textTertiary }}>小票管家 · Made in Aotearoa 🇳🇿</div>
+      </Body>
+      <TabBar t={t} current="me" onChange={onNavigate}/>
+    </Screen>
+  );
+}
+
+// ── Screen 8: Batch ───────────────────────────────────────────────────────────
+function BatchScreen({ t, onNavigate }) {
+  const isDark = t===TOKENS.dark;
+  const queue = [
+    {merchant:'Officemax NZ',amount:127.83,cat:'办公用品',confidence:96,items:5,status:'current'},
+    {merchant:'New World',amount:89.40,cat:'餐饮',confidence:92,items:12,status:'pending'},
+    {merchant:'Warehouse',amount:45.20,cat:'办公用品',confidence:78,items:3,status:'pending'},
+    {merchant:'Unknown',amount:0,cat:'其他',confidence:0,items:0,status:'error'},
+  ];
+  const done=8, total=12, top=queue[0];
+  return (
+    <Screen t={t}>
+      <ScreenStatusBar dark={isDark}/>
+      <div style={{ padding:'52px 16px 12px', background:t.surface, borderBottom:`1px solid ${t.border}`, display:'flex', alignItems:'center', gap:10 }}>
+        <button onClick={() => onNavigate?.('home')} style={{ width:36, height:36, borderRadius:10, border:'none', background:t.surfaceMuted, color:t.textSecondary, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><Icon name="close" size={18}/></button>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:16, fontWeight:600, color:t.textPrimary }}>批量审核</div>
+          <div style={{ fontSize:11, color:t.textTertiary, marginTop:1 }}>4 月相册导入 · 共 {total} 张</div>
+        </div>
+        <button style={{ background:'none', border:'none', color:t.brand, fontSize:13, fontWeight:600, cursor:'pointer' }}>全部通过</button>
+      </div>
+      <div style={{ padding:'12px 16px', background:t.surface, borderBottom:`1px solid ${t.border}` }}>
+        <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8, fontSize:12, fontWeight:500 }}>
+          <span style={{ color:t.textSecondary }}>已审核 {done}/{total}</span>
+          <span style={{ color:t.brand, fontWeight:600 }}>{Math.round(done/total*100)}%</span>
+        </div>
+        <div style={{ height:6, background:t.surfaceMuted, borderRadius:3, overflow:'hidden', display:'flex' }}>
+          <div style={{ width:`${done/total*100}%`, background:t.brand, height:'100%', borderRadius:3 }}/>
+          <div style={{ width:`${1/total*100}%`, background:t.accent, height:'100%' }}/>
+        </div>
+        <div style={{ display:'flex', gap:10, marginTop:8, fontSize:11 }}>
+          <span style={{ color:t.success, fontWeight:600 }}>● {done} 已通过</span>
+          <span style={{ color:t.accent, fontWeight:600 }}>● 1 需人工</span>
+          <span style={{ color:t.textTertiary, fontWeight:600 }}>● {total-done-1} 待审</span>
+        </div>
+      </div>
+      <Body>
+        <div style={{ padding:'22px 16px 12px', position:'relative', height:380 }}>
+          <div style={{ position:'absolute', left:30, right:30, top:30, background:t.surface, borderRadius:16, border:`1px solid ${t.border}`, height:330, opacity:0.4 }}/>
+          <div style={{ position:'absolute', left:22, right:22, top:22, background:t.surface, borderRadius:16, border:`1px solid ${t.border}`, height:330, opacity:0.7, boxShadow:t.shadowCard }}/>
+          <div style={{ position:'absolute', left:16, right:16, top:12, background:t.surface, borderRadius:18, border:`1px solid ${t.border}`, height:340, boxShadow:t.shadowLift, padding:18, display:'flex', flexDirection:'column', gap:14, transform:'rotate(-1deg)' }}>
+            <div style={{ display:'flex', gap:14 }}>
+              <ReceiptThumb t={t} merchant="OFFICEMAX" amount={nz(top.amount)} width={78} height={108} rotate={0}/>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:10.5, color:t.textTertiary, fontWeight:600, letterSpacing:0.3, textTransform:'uppercase' }}>第 {done+1} 张 · of {total}</div>
+                <div style={{ fontSize:17, fontWeight:700, color:t.textPrimary, letterSpacing:-0.3, marginTop:4 }}>{top.merchant}</div>
+                <div style={{ fontFamily:FONTS.num, fontSize:22, fontWeight:700, color:t.textPrimary, letterSpacing:-0.5, marginTop:4 }}>{nz(top.amount)}</div>
+                <div style={{ display:'inline-flex', gap:6, alignItems:'center', marginTop:8 }}>
+                  <CategoryDot cat={top.cat} size={18}/>
+                  <span style={{ fontSize:12, fontWeight:600, color:t.textSecondary }}>{top.cat}</span>
+                  <Chip t={t} label={`${top.confidence}%`} tone="success" size="sm" icon="sparkle"/>
+                </div>
+              </div>
+            </div>
+            <div style={{ background:t.surfaceMuted, borderRadius:10, padding:10, flex:1, overflow:'hidden' }}>
+              <div style={{ fontSize:10.5, color:t.textTertiary, fontWeight:600, letterSpacing:0.3, textTransform:'uppercase', marginBottom:6 }}>{top.items} 项条目</div>
+              {['A4 打印纸 × 2','HP 黑色墨盒','订书机 + 钉','Lindt 黑巧克力'].map((n,i) => (
+                <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:12, padding:'3px 0', color:t.textPrimary }}>
+                  <span>{n}</span><span style={{ fontFamily:FONTS.num, fontWeight:600 }}>{nz([27.80,64.90,12.50,8.90][i])}</span>
+                </div>
+              ))}
+              <div style={{ fontSize:11, color:t.textTertiary, marginTop:4 }}>+ 1 项</div>
+            </div>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, fontWeight:600 }}>
+              <span style={{ color:t.danger, display:'inline-flex', alignItems:'center', gap:4 }}><Icon name="chevL" size={12}/> 左滑 删除</span>
+              <span style={{ color:t.textTertiary, display:'inline-flex', alignItems:'center', gap:4 }}><Icon name="edit" size={12}/> 点击编辑</span>
+              <span style={{ color:t.success, display:'inline-flex', alignItems:'center', gap:4 }}>右滑 通过 <Icon name="chevR" size={12}/></span>
+            </div>
+          </div>
+        </div>
+        <div style={{ padding:'0 16px', display:'flex', gap:10, marginBottom:14 }}>
+          <button style={{ width:52, height:52, borderRadius:26, border:`1.5px solid ${t.danger}`, background:t.surface, color:t.danger, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><Icon name="close" size={22} strokeWidth={2.2}/></button>
+          <button onClick={() => onNavigate?.('confirm')} style={{ flex:1, height:52, borderRadius:26, border:`1px solid ${t.border}`, background:t.surface, color:t.textPrimary, cursor:'pointer', fontSize:14, fontWeight:600, display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+            <Icon name="edit" size={16}/> 查看详情
+          </button>
+          <button style={{ width:52, height:52, borderRadius:26, border:'none', background:t.brand, color:'#fff', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:`0 6px 18px ${t.brand}55` }}>
+            <Icon name="check" size={24} strokeWidth={2.5}/>
+          </button>
+        </div>
+        <div style={{ padding:'8px 16px 0' }}>
+          <div style={{ fontSize:12, fontWeight:600, color:t.textTertiary, letterSpacing:0.3, textTransform:'uppercase', padding:'0 4px 8px' }}>队列中</div>
+          <Card t={t} pad={0}>
+            {queue.slice(1).map((q,i) => (
+              <div key={i} style={{ padding:'10px 12px', borderTop:i===0?'none':`1px solid ${t.divider}`, display:'flex', alignItems:'center', gap:10 }}>
+                <div style={{ width:32, height:44, borderRadius:4, background:'#fff', border:'1px solid #ddd', display:'flex', alignItems:'center', justifyContent:'center', fontSize:7, fontFamily:FONTS.mono, fontWeight:700, color:'#666' }}>{q.merchant.slice(0,4).toUpperCase()}</div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:13, fontWeight:600, color:t.textPrimary }}>{q.merchant==='Unknown'?'无法识别':q.merchant}</div>
+                  <div style={{ fontSize:11, color:t.textTertiary, marginTop:2 }}>{q.status==='error'?'模糊照片 · 需人工编辑':`${q.cat} · ${q.items} 项`}</div>
+                </div>
+                {q.status==='error'
+                  ? <Chip t={t} label="需处理" tone="danger" size="sm" icon="info"/>
+                  : <><span style={{ fontFamily:FONTS.num, fontSize:13, fontWeight:600, color:t.textPrimary }}>{nz(q.amount)}</span><Chip t={t} label={`${q.confidence}%`} tone={q.confidence>=90?'success':'warn'} size="sm"/></>}
+              </div>
+            ))}
+          </Card>
+        </div>
+      </Body>
+    </Screen>
+  );
+}
+
+// ── App Root ──────────────────────────────────────────────────────────────────
+function App() {
+  const [screen, setScreen] = useState('home');
+  const [darkMode, setDarkMode] = useState(false);
+  const t = darkMode ? TOKENS.dark : TOKENS.light;
+
+  const onNavigate = (s) => {
+    if (s === 'capture') { setScreen('capture'); return; }
+    if (s === 'me') { setScreen('me'); return; }
+    setScreen(s);
+  };
+
+  const screens = {
+    home:    <DashboardScreen t={t} onNavigate={onNavigate}/>,
+    capture: <CaptureScreen  t={t} onNavigate={onNavigate}/>,
+    confirm: <ConfirmScreen  t={t} onNavigate={onNavigate}/>,
+    list:    <ListScreen     t={t} onNavigate={onNavigate}/>,
+    report:  <ReportScreen   t={t} onNavigate={onNavigate}/>,
+    detail:  <DetailScreen   t={t} onNavigate={onNavigate}/>,
+    me:      <SettingsScreen t={t} onNavigate={onNavigate}/>,
+    batch:   <BatchScreen    t={t} onNavigate={onNavigate}/>,
+  };
+
+  return (
+    <div style={{ width:'100%', height:'100%', position:'relative' }}>
+      {screens[screen] || screens.home}
+      {/* Dark/light toggle */}
+      <button
+        onClick={() => setDarkMode(d => !d)}
+        style={{ position:'absolute', bottom:96, right:16, zIndex:100, width:38, height:38, borderRadius:19, background:darkMode?'rgba(255,255,255,0.15)':'rgba(0,0,0,0.12)', border:'none', color:darkMode?'#fff':'#333', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', backdropFilter:'blur(10px)', WebkitBackdropFilter:'blur(10px)', boxShadow:'0 2px 8px rgba(0,0,0,0.2)' }}
+        title={darkMode?'切换浅色模式':'切换深色模式'}
+      >
+        <Icon name={darkMode?'sun':'moon'} size={18}/>
+      </button>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+# Copy this to .dev.vars for local development (never commit .dev.vars)
+GEMINI_API_KEY=your-gemini-api-key-here
+GEMINI_MODEL=gemini-2.0-flash-lite
+SESSION_DAYS=30
+MAX_UPLOAD_MB=10
+BASE_PATH=/tax

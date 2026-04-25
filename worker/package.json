@@ -1,0 +1,19 @@
+{
+  "name": "taxmaker-worker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev --local",
+    "deploy": "wrangler deploy",
+    "db:init": "wrangler d1 execute taxmaker --local --file=../schema.sql",
+    "db:init:prod": "wrangler d1 execute taxmaker --file=../schema.sql"
+  },
+  "dependencies": {
+    "hono": "^4.7.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250430.0",
+    "typescript": "^5.8.0",
+    "wrangler": "^4.0.0"
+  }
+}

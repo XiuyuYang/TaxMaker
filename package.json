@@ -1,0 +1,16 @@
+{
+  "name": "taxmaker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev --local",
+    "build": "cd frontend && npm run build",
+    "deploy": "npm run build && wrangler deploy",
+    "db:init:local": "wrangler d1 execute taxmaker --local --file=schema.sql",
+    "db:init:prod": "wrangler d1 execute taxmaker --file=schema.sql --remote"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250430.0",
+    "wrangler": "^4.0.0"
+  }
+}
