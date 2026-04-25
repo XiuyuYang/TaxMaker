@@ -67,9 +67,14 @@ export interface GSTSummary {
   receipt_count: number;
 }
 
+// ─── Base path ────────────────────────────────────────────────────────────
+// import.meta.env.BASE_URL is '/tax/' (set via vite base option). Strip the
+// trailing slash so we can prefix paths like /api/auth/me → /tax/api/auth/me.
+const BASE = (import.meta.env.BASE_URL ?? '/tax/').replace(/\/$/, '');
+
 // ─── Helpers ──────────────────────────────────────────────────────────────
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
+  const res = await fetch(`${BASE}${path}`, {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     ...init,
@@ -179,7 +184,7 @@ export const api = {
       return res.receipt;
     },
     imageUrl(id: string): string {
-      return `/api/receipts/${id}/image`;
+      return `${BASE}/api/receipts/${id}/image`;
     },
   },
 
@@ -198,7 +203,7 @@ export const api = {
       });
     },
     download(id: string): Promise<Response> {
-      return fetch(`/api/exports/${id}/download`, { credentials: 'include' });
+      return fetch(`${BASE}/api/exports/${id}/download`, { credentials: 'include' });
     },
   },
 };

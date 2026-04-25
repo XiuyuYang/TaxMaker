@@ -44,22 +44,12 @@ app.all('/api/*', (c) => {
 });
 
 // ── Serve frontend SPA for all other routes ───────────────────────────────────
-// The Worker is mounted at /tax/* on the domain, but Vite builds assets relative
-// to the dist/ root. Strip the /tax prefix before looking up assets so that
-// e.g. /tax/assets/index.js → /assets/index.js in the dist folder.
+// The /tax prefix is stripped at the entry point (export default below) before
+// Hono sees the request, so pathnames here are already dist-root-relative.
 
 app.all('*', async (c) => {
-  const basePath = (c.env.BASE_PATH || '/tax').replace(/\/$/, ''); // e.g. "/tax"
   const url = new URL(c.req.url);
-  let pathname = url.pathname;
 
-  // Strip the base path prefix so ASSETS can find files in the dist root
-  if (pathname.startsWith(basePath + '/') || pathname === basePath) {
-    pathname = pathname.slice(basePath.length) || '/';
-  }
-  if (!pathname.startsWith('/')) pathname = '/' + pathname;
-
-  url.pathname = pathname;
   const assetReq = new Request(url.toString(), {
     method: c.req.method,
     headers: c.req.raw.headers,
@@ -86,4 +76,23 @@ app.onError((err, c) => {
   return c.json({ error: message }, 500);
 });
 
-export default app;
+// ── Entry point ───────────────────────────────────────────────────────────────
+// In production the Worker is mounted at /tax/* so every request arrives with
+// the /tax prefix (e.g. /tax/api/auth/me, /tax/dashboard). Strip that prefix
+// once here so all Hono routes and the ASSETS binding work with plain paths
+// (/api/auth/me, /dashboard) in both production and local dev.
+
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(request.url);
+    const basePath = (env.BASE_PATH || '/tax').replace(/\/$/, '');
+
+    if (url.pathname.startsWith(basePath + '/') || url.pathname === basePath) {
+      url.pathname = url.pathname.slice(basePath.length) || '/';
+      if (!url.pathname.startsWith('/')) url.pathname = '/' + url.pathname;
+      request = new Request(url.toString(), request);
+    }
+
+    return app.fetch(request, env, ctx);
+  },
+};
