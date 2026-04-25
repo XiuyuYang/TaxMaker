@@ -5,14 +5,16 @@ compatibility_flags = ["nodejs_compat"]
 workers_dev = false
 preview_urls = false
 
-# Route: all /tax/* traffic goes to this Worker
+# Route: all /tax and /tax/* traffic goes to this Worker
 routes = [
+  { pattern = "sqdyxy.com/tax", zone_name = "sqdyxy.com" },
   { pattern = "sqdyxy.com/tax/*", zone_name = "sqdyxy.com" },
+  { pattern = "www.sqdyxy.com/tax", zone_name = "sqdyxy.com" },
   { pattern = "www.sqdyxy.com/tax/*", zone_name = "sqdyxy.com" }
 ]
 
 [vars]
-GEMINI_MODEL = "google/gemini-2.0-flash-exp:free"
+GEMINI_MODEL = "baidu/qianfan-ocr-fast:free"
 AI_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 BASE_PATH = "/tax"
 SESSION_DAYS = "30"

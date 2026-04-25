@@ -22,30 +22,28 @@ Rules:
 - For multiple receipts in one image, add multiple objects to receipts array`;
 
 
-export async function recognizeReceipt(
+// Fallback model pool — tried in order when the primary is rate-limited.
+const FALLBACK_MODELS = [
+  'google/gemma-4-26b-a4b-it:free',
+  'google/gemma-4-31b-it:free',
+  'baidu/qianfan-ocr-fast:free',
+];
+
+async function callAI(
+  endpoint: string,
+  apiKey: string,
+  model: string,
   imageBase64: string,
   mimeType: string,
-  env: Env
-): Promise<AIResult> {
-  const endpoint = env.AI_ENDPOINT ?? DEFAULT_ENDPOINT;
-  const model = env.GEMINI_MODEL ?? 'gemini-2.0-flash-lite';
-
+): Promise<string> {
   const requestBody = {
     model,
     messages: [
       {
         role: 'user',
         content: [
-          {
-            type: 'text',
-            text: SYSTEM_PROMPT,
-          },
-          {
-            type: 'image_url',
-            image_url: {
-              url: `data:${mimeType};base64,${imageBase64}`,
-            },
-          },
+          { type: 'text', text: SYSTEM_PROMPT },
+          { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
         ],
       },
     ],
@@ -57,7 +55,7 @@ export async function recognizeReceipt(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${env.GEMINI_API_KEY}`,
+      'Authorization': `Bearer ${apiKey.trim()}`,
     },
     body: JSON.stringify(requestBody),
   });
@@ -68,17 +66,47 @@ export async function recognizeReceipt(
   }
 
   const data = (await response.json()) as {
-    choices?: Array<{
-      message?: {
-        content?: string;
-      };
-    }>;
+    choices?: Array<{ message?: { content?: string } }>;
   };
-
   const content = data?.choices?.[0]?.message?.content;
-  if (!content) {
-    throw new Error('Empty response from Gemini API');
+  if (!content) throw new Error('Empty response from AI API');
+  return content;
+}
+
+export async function recognizeReceipt(
+  imageBase64: string,
+  mimeType: string,
+  env: Env
+): Promise<AIResult> {
+  const endpoint = env.AI_ENDPOINT ?? DEFAULT_ENDPOINT;
+  const primaryModel = env.GEMINI_MODEL ?? 'google/gemma-4-26b-a4b-it:free';
+  const apiKey = env.GEMINI_API_KEY;
+
+  // Build the candidate model list: primary first, then fallbacks (excluding primary)
+  const candidates = [
+    primaryModel,
+    ...FALLBACK_MODELS.filter(m => m !== primaryModel),
+  ];
+
+  let lastError: Error | null = null;
+  let content: string | null = null;
+
+  for (const model of candidates) {
+    try {
+      content = await callAI(endpoint, apiKey, model, imageBase64, mimeType);
+      break; // success
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      // Only continue to fallback on rate-limit (429); hard-fail on auth / bad request
+      if (!lastError.message.includes('429')) throw lastError;
+      // Brief pause before trying the next model
+      await new Promise(r => setTimeout(r, 2000));
+    }
   }
+
+  if (!content) throw lastError ?? new Error('All AI models failed');
+
+  // ── Parse JSON response ─────────────────────────────────────────────────────
 
   // Strip markdown fences and extract JSON object
   let cleaned = content
@@ -150,6 +178,33 @@ function toNum(v: unknown): number | null {
   return null;
 }
 
+/** Normalize a date string to YYYY-MM-DD regardless of input format. */
+function normalizeDate(raw: unknown): string | null {
+  if (typeof raw !== 'string' || !raw) return null;
+  const s = raw.trim();
+
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  // DD/MM/YYYY or DD-MM-YYYY
+  const dmy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (dmy) {
+    const [, d, m, y] = dmy;
+    return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  }
+
+  // YYYY/MM/DD
+  const ymd = s.match(/^(\d{4})[\/\-](\d{2})[\/\-](\d{2})$/);
+  if (ymd) {
+    const [, y, m, d] = ymd;
+    return `${y}-${m}-${d}`;
+  }
+
+  // Fallback: return first 10 chars if it looks date-like
+  const slice = s.slice(0, 10).replace(/\//g, '-');
+  return /^\d{4}-\d{2}-\d{2}$/.test(slice) ? slice : null;
+}
+
 function normalizeAIResult(parsed: unknown): void {
   if (typeof parsed !== 'object' || parsed === null) return;
   const r = parsed as Record<string, unknown>;
@@ -157,23 +212,42 @@ function normalizeAIResult(parsed: unknown): void {
   for (const rec of r['receipts'] as unknown[]) {
     if (typeof rec !== 'object' || rec === null) continue;
     const obj = rec as Record<string, unknown>;
+
     // Coerce string numbers to actual numbers
-    for (const field of ['total_amount', 'gst_amount', 'confidence_summary']) {
+    for (const field of ['total_amount', 'gst_amount']) {
       if (field in obj) obj[field] = toNum(obj[field]);
     }
+    // confidence_summary: coerce and normalise to 0-100 range
+    const rawConf = toNum(obj['confidence_summary']);
+    obj['confidence_summary'] = rawConf === null
+      ? 50
+      : rawConf <= 1 ? Math.round(rawConf * 100) : rawConf;
+
+    // Normalise date to YYYY-MM-DD
+    obj['receipt_date'] = normalizeDate(obj['receipt_date']);
+
     // Ensure items is always an array
     if (!Array.isArray(obj['items'])) obj['items'] = [];
     for (const item of obj['items'] as unknown[]) {
       if (typeof item !== 'object' || item === null) continue;
       const i = item as Record<string, unknown>;
+      // Field aliases for Baidu OCR model (item_description → description, price → line_total)
+      if (typeof i['item_description'] === 'string' && typeof i['description'] !== 'string') {
+        i['description'] = i['item_description'];
+      }
+      if (i['price'] !== undefined && i['line_total'] === undefined) {
+        i['line_total'] = i['price'];
+      }
+      // Coerce numeric fields
       for (const f of ['line_total', 'quantity', 'unit_price']) {
         if (f in i) i[f] = toNum(i[f]);
       }
+      // Ensure description exists
+      if (typeof i['description'] !== 'string') i['description'] = '';
     }
     // Ensure currency and raw_text are strings
     if (typeof obj['currency'] !== 'string') obj['currency'] = 'NZD';
     if (typeof obj['raw_text'] !== 'string') obj['raw_text'] = '';
-    if (typeof obj['confidence_summary'] !== 'number') obj['confidence_summary'] = 50;
   }
 }
 

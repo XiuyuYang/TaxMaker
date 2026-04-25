@@ -193,7 +193,7 @@ async function recognizeAndSave(
       )
         .bind(
           receiptData.merchant_name,
-          receiptData.receipt_date ? receiptData.receipt_date.replace(/\//g, '-').slice(0, 10) : null,
+          receiptData.receipt_date ?? null,
           receiptData.currency,
           receiptData.total_amount,
           receiptData.gst_amount,
