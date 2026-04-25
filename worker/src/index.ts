@@ -44,9 +44,38 @@ app.all('/api/*', (c) => {
 });
 
 // ── Serve frontend SPA for all other routes ───────────────────────────────────
+// The Worker is mounted at /tax/* on the domain, but Vite builds assets relative
+// to the dist/ root. Strip the /tax prefix before looking up assets so that
+// e.g. /tax/assets/index.js → /assets/index.js in the dist folder.
 
 app.all('*', async (c) => {
-  return c.env.ASSETS.fetch(c.req.raw);
+  const basePath = (c.env.BASE_PATH || '/tax').replace(/\/$/, ''); // e.g. "/tax"
+  const url = new URL(c.req.url);
+  let pathname = url.pathname;
+
+  // Strip the base path prefix so ASSETS can find files in the dist root
+  if (pathname.startsWith(basePath + '/') || pathname === basePath) {
+    pathname = pathname.slice(basePath.length) || '/';
+  }
+  if (!pathname.startsWith('/')) pathname = '/' + pathname;
+
+  url.pathname = pathname;
+  const assetReq = new Request(url.toString(), {
+    method: c.req.method,
+    headers: c.req.raw.headers,
+    body: c.req.raw.body,
+    redirect: 'manual',
+  });
+
+  let res = await c.env.ASSETS.fetch(assetReq);
+
+  // SPA fallback: for client-side routes that don't match a file, serve index.html
+  if (res.status === 404) {
+    url.pathname = '/index.html';
+    res = await c.env.ASSETS.fetch(new Request(url.toString(), { headers: c.req.raw.headers }));
+  }
+
+  return res;
 });
 
 // ── Global error handler ──────────────────────────────────────────────────────
