@@ -2,15 +2,13 @@ name = "taxmaker"
 main = "worker/src/index.ts"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
-
-# Static assets — built frontend served alongside the Worker
-[assets]
-directory = "./frontend/dist"
-binding = "ASSETS"
+workers_dev = false
+preview_urls = false
 
 # Route: all /tax/* traffic goes to this Worker
 routes = [
-  { pattern = "sqdyxy.com/tax/*", zone_name = "sqdyxy.com" }
+  { pattern = "sqdyxy.com/tax/*", zone_name = "sqdyxy.com" },
+  { pattern = "www.sqdyxy.com/tax/*", zone_name = "sqdyxy.com" }
 ]
 
 [vars]
@@ -19,6 +17,11 @@ AI_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 BASE_PATH = "/tax"
 SESSION_DAYS = "30"
 MAX_UPLOAD_MB = "10"
+
+# Static assets — built frontend served alongside the Worker
+[assets]
+directory = "./frontend/dist"
+binding = "ASSETS"
 
 [[d1_databases]]
 binding = "DB"
