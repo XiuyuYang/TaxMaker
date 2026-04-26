@@ -8,6 +8,14 @@ import {
 } from '../components/primitives';
 import { FONTS } from '../tokens';
 
+function formatLocalDateTime(iso: string): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso.slice(0, 16).replace('T', ' ');
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function statusLabel(s: Receipt['status']) {
   const m: Record<string, string> = {
     uploaded: '已上传', processing: '识别中', needs_review: '待确认', confirmed: '已确认', failed: '失败',
@@ -233,8 +241,8 @@ export default function Detail() {
           <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
             <Card t={t} style={{ padding: 0 }}>
               {[
-                { label: '上传时间', value: receipt.created_at.slice(0, 16).replace('T', ' ') },
-                { label: '最后更新', value: receipt.updated_at.slice(0, 16).replace('T', ' ') },
+                { label: '上传时间', value: formatLocalDateTime(receipt.created_at) },
+                { label: '最后更新', value: formatLocalDateTime(receipt.updated_at) },
                 { label: '状态', value: statusLabel(receipt.status) },
               ].map((row, i) => (
                 <div key={row.label} style={{
