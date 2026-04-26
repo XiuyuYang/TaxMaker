@@ -61,6 +61,15 @@ export default function Confirm() {
     api.categories.list().then(setCategories).catch(() => { });
   }, []);
 
+  // Auto-clamp day if year/month changes make the current day invalid (e.g. Feb 30)
+  useEffect(() => {
+    if (!dateYear || !dateMonth || !dateDay) return;
+    const daysInMonth = new Date(parseInt(dateYear), parseInt(dateMonth), 0).getDate();
+    if (parseInt(dateDay) > daysInMonth) {
+      setDateDay(String(daysInMonth).padStart(2, '0'));
+    }
+  }, [dateYear, dateMonth, dateDay]);
+
   const onReady = useCallback((r: Receipt) => {
     setReceipt(r);
     setPolling(false);
@@ -368,25 +377,33 @@ export default function Confirm() {
                   <option key={m} value={m}>{parseInt(m)}月</option>
                 ))}
               </select>
-              {/* Day */}
-              <select
-                value={dateDay}
-                onChange={e => setDateDay(e.target.value)}
-                style={{
-                  width: '100%', padding: '12px 8px', background: t.surfaceAlt,
-                  border: `1px solid ${t.border}`, borderRadius: 10, fontSize: 15,
-                  color: dateDay ? t.textPrimary : t.textTertiary, outline: 'none',
-                  boxSizing: 'border-box', appearance: 'none', WebkitAppearance: 'none',
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23999' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
-                  backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
-                  paddingRight: 30,
-                }}
-              >
-                <option value="">日</option>
-                {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map(d => (
-                  <option key={d} value={d}>{parseInt(d)}日</option>
-                ))}
-              </select>
+              {/* Day — number of days depends on selected year/month */}
+              {(() => {
+                const yNum = parseInt(dateYear) || new Date().getFullYear();
+                const mNum = parseInt(dateMonth) || 1;
+                // last day of month: use day 0 of next month
+                const daysInMonth = (dateYear && dateMonth) ? new Date(yNum, mNum, 0).getDate() : 31;
+                return (
+                  <select
+                    value={dateDay}
+                    onChange={e => setDateDay(e.target.value)}
+                    style={{
+                      width: '100%', padding: '12px 8px', background: t.surfaceAlt,
+                      border: `1px solid ${t.border}`, borderRadius: 10, fontSize: 15,
+                      color: dateDay ? t.textPrimary : t.textTertiary, outline: 'none',
+                      boxSizing: 'border-box', appearance: 'none', WebkitAppearance: 'none',
+                      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23999' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
+                      backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
+                      paddingRight: 30,
+                    }}
+                  >
+                    <option value="">日</option>
+                    {Array.from({ length: daysInMonth }, (_, i) => String(i + 1).padStart(2, '0')).map(d => (
+                      <option key={d} value={d}>{parseInt(d)}日</option>
+                    ))}
+                  </select>
+                );
+              })()}
             </div>
           </div>
 
@@ -396,6 +413,7 @@ export default function Confirm() {
               <input
                 type="number"
                 step="0.01"
+                min="0"
                 value={totalAmount}
                 onChange={e => {
                   setTotalAmount(e.target.value);
@@ -415,6 +433,7 @@ export default function Confirm() {
               <input
                 type="number"
                 step="0.01"
+                min="0"
                 value={gstAmount}
                 onChange={e => setGstAmount(e.target.value)}
                 placeholder="0.00"

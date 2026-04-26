@@ -536,8 +536,17 @@ receipts.patch('/:id', async (c) => {
   const editableNumberFields = ['total_amount', 'gst_amount', 'net_amount'];
   for (const field of editableNumberFields) {
     if (field in patch) {
+      const v = patch[field];
+      if (v !== null && v !== undefined) {
+        if (typeof v !== 'number' || isNaN(v)) {
+          return c.json({ error: `${field} must be a number or null` }, 400);
+        }
+        if (v < 0) {
+          return c.json({ error: `${field} must be a non-negative number` }, 400);
+        }
+      }
       updates.push(`${field} = ?`);
-      values.push(patch[field] ?? null);
+      values.push(v ?? null);
     }
   }
 
