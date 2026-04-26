@@ -85,6 +85,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       const body = await res.json() as { error?: string };
       if (body.error) msg = body.error;
     } catch { /* ignore */ }
+    // Notify app of session expiry on 401 (except auth.me probe and login/register
+    // attempts where 401 means "credentials wrong", not "session expired")
+    if (res.status === 401
+        && !path.endsWith('/api/auth/me')
+        && !path.endsWith('/api/auth/login')
+        && !path.endsWith('/api/auth/register')) {
+      try { window.dispatchEvent(new CustomEvent('auth:expired')); } catch { /* ignore */ }
+    }
     throw new Error(msg);
   }
   if (res.status === 204) return undefined as T;
@@ -126,8 +134,11 @@ export const api = {
   },
 
   categories: {
-    async list(): Promise<Category[]> {
-      const res = await request<{ categories: Category[] }>('/api/categories');
+    async list(opts?: { includeInactive?: boolean }): Promise<Category[]> {
+      const path = opts?.includeInactive
+        ? '/api/categories?include_inactive=true'
+        : '/api/categories';
+      const res = await request<{ categories: Category[] }>(path);
       return res.categories;
     },
     async create(data: Partial<Category>): Promise<Category> {
@@ -144,8 +155,8 @@ export const api = {
       });
       return res.category;
     },
-    delete(id: string): Promise<void> {
-      return request<void>(`/api/categories/${id}`, { method: 'DELETE' });
+    delete(id: string): Promise<{ ok: boolean; deleted: boolean; reason?: string }> {
+      return request<{ ok: boolean; deleted: boolean; reason?: string }>(`/api/categories/${id}`, { method: 'DELETE' });
     },
   },
 

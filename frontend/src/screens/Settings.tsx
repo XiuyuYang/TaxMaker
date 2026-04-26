@@ -99,10 +99,10 @@ export default function Settings() {
         <Section label="数据与隐私">
           <Card t={t} style={{ padding: 0 }}>
             <div style={{ borderBottom: `1px solid ${t.divider}` }}>
-              <Row icon="shield" label="数据存储" value="所有数据存储在 Cloudflare 全球节点" />
+              <Row icon="shield" label="数据存储" value="加密保存在 Cloudflare 全球边缘网络" />
             </div>
             <div style={{ borderBottom: `1px solid ${t.divider}` }}>
-              <Row icon="lock" label="图片存储" value="原始小票图片加密存储于 Cloudflare R2" />
+              <Row icon="lock" label="图片存储" value="原始图片加密存储，仅本人可访问" />
             </div>
             <Row icon="info" label="税务声明" value="本应用仅供参考，不构成专业税务建议" />
           </Card>

@@ -87,11 +87,15 @@ export default function Categories() {
   };
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`删除类别"${name}"？此操作不可恢复。`)) return;
+    if (!confirm(`删除类别"${name}"？\n如果该类别已被小票引用，将自动停用而非永久删除。`)) return;
     try {
-      await api.categories.delete(id);
+      const res = await api.categories.delete(id);
       load();
-      show('已删除', 'success');
+      if (res.deleted) {
+        show('类别已删除', 'success');
+      } else {
+        show('类别已停用（仍被历史小票引用，保留以维持记录完整）', 'info');
+      }
     } catch {
       show('删除失败', 'error');
     }

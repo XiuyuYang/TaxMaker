@@ -36,11 +36,14 @@ categories.get('/', async (c) => {
   const userId = await requireAuth(c);
   if (!userId) return c.json({ error: 'Not authenticated' }, 401);
 
-  const result = await c.env.DB.prepare(
-    `SELECT * FROM categories WHERE (user_id IS NULL OR user_id = ?) AND is_active = 1 ORDER BY sort_order`
-  )
-    .bind(userId)
-    .all<Category>();
+  // ?include_inactive=true returns deactivated user categories too (so the
+  // display layer can resolve names for receipts that still reference them)
+  const includeInactive = c.req.query('include_inactive') === 'true';
+  const sql = includeInactive
+    ? `SELECT * FROM categories WHERE (user_id IS NULL OR user_id = ?) ORDER BY is_active DESC, sort_order`
+    : `SELECT * FROM categories WHERE (user_id IS NULL OR user_id = ?) AND is_active = 1 ORDER BY sort_order`;
+
+  const result = await c.env.DB.prepare(sql).bind(userId).all<Category>();
 
   return c.json({ categories: result.results });
 });

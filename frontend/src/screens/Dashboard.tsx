@@ -56,27 +56,32 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (signal?: { cancelled: boolean }) => {
     setLoading(true);
     try {
       const [summaryRes, allRes, pendingRes, catsRes] = await Promise.all([
         api.reports.gstSummary(period.start, period.end).catch(() => null),
         api.receipts.list({ per_page: 5 }),
         api.receipts.list({ status: 'needs_review', per_page: 1 }),
-        api.categories.list().catch(() => [] as Category[]),
+        api.categories.list({ includeInactive: true }).catch(() => [] as Category[]),
       ]);
+      if (signal?.cancelled) return;
       setSummary(summaryRes);
       setRecent(allRes.receipts);
       setPendingCount(pendingRes.total);
       setCategories(catsRes);
     } catch {
-      setRecent([]);
+      if (!signal?.cancelled) setRecent([]);
     } finally {
-      setLoading(false);
+      if (!signal?.cancelled) setLoading(false);
     }
   }, [period.start, period.end]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    const signal = { cancelled: false };
+    fetchData(signal);
+    return () => { signal.cancelled = true; };
+  }, [fetchData]);
 
   const catName = (id: string | null) =>
     id ? (categories.find(c => c.id === id)?.name ?? '未分类') : '未分类';

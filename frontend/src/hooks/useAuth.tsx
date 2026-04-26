@@ -29,6 +29,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refetch().finally(() => setLoading(false));
   }, [refetch]);
 
+  // Auto-clear auth state when any API call returns 401 (session expired)
+  useEffect(() => {
+    const onExpired = () => setUser(null);
+    window.addEventListener('auth:expired', onExpired);
+    return () => window.removeEventListener('auth:expired', onExpired);
+  }, []);
+
   const login = async (username: string, password: string) => {
     const u = await api.auth.login(username, password);
     setUser(u);

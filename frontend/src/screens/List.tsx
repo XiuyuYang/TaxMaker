@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
 import { api, Receipt, Category } from '../api/client';
@@ -70,21 +70,25 @@ export default function List() {
   const [total, setTotal] = useState(0);
   const PER = 30;
 
+  const fetchSeq = useRef(0);
   const fetchReceipts = useCallback(async (pg = 1) => {
+    const seq = ++fetchSeq.current;
     setLoading(true);
     try {
       const params: { page: number; per_page: number; status?: string } = { page: pg, per_page: PER };
       if (filter !== 'all') params.status = filter;
       const res = await api.receipts.list(params);
+      // Discard if a newer fetch has been kicked off in the meantime
+      if (seq !== fetchSeq.current) return;
       setReceipts(pg === 1 ? res.receipts : prev => [...prev, ...res.receipts]);
       setTotal(res.total);
     } catch { /* ignore */ } finally {
-      setLoading(false);
+      if (seq === fetchSeq.current) setLoading(false);
     }
   }, [filter]);
 
   useEffect(() => {
-    api.categories.list().then(setCategories).catch(() => {});
+    api.categories.list({ includeInactive: true }).then(setCategories).catch(() => {});
   }, []);
 
   useEffect(() => {

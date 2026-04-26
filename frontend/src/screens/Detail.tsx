@@ -58,13 +58,17 @@ export default function Detail() {
 
   useEffect(() => {
     if (!id) return;
+    let cancelled = false;
     Promise.all([
       api.receipts.get(id),
-      api.categories.list(),
+      api.categories.list({ includeInactive: true }),
     ]).then(([r, cats]) => {
+      if (cancelled) return;
       setReceipt(r);
       setCategories(cats);
-    }).catch(() => navigate('/list')).finally(() => setLoading(false));
+    }).catch(() => { if (!cancelled) navigate('/list'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [id, navigate]);
 
   const catName = (cid: string | null) =>

@@ -46,17 +46,20 @@ export default function Report() {
 
   useEffect(() => {
     if (!period) return;
+    let cancelled = false;
     setLoading(true);
     setSummary(null);
     setBox5('');
     setBox13('');
     api.reports.gstSummary(period.start, period.end)
       .then(s => {
+        if (cancelled) return;
         setSummary(s);
         setBox6(s.total_gst_claimable > 0 ? s.total_gst_claimable.toFixed(2) : '');
       })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [selIdx]);
 
   const handleExport = async () => {
