@@ -3,13 +3,22 @@ import { api, Receipt } from '../api/client';
 
 interface PollingOptions {
   onReady: (receipt: Receipt) => void;
+  onError?: (err: Error) => void;
   resetKey?: number;
 }
 
 const PENDING_STATUSES: Receipt['status'][] = ['uploaded', 'processing'];
 const MAX_POLLS = 60;
 
-export function useReceiptPolling(id: string, { onReady, resetKey = 0 }: PollingOptions) {
+// Errors that indicate the resource is permanently inaccessible — no point retrying
+const isPermanentError = (err: unknown) => {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message.toLowerCase();
+  return msg.includes('not found') || msg.includes('not authenticated')
+    || msg.includes('401') || msg.includes('403') || msg.includes('404');
+};
+
+export function useReceiptPolling(id: string, { onReady, onError, resetKey = 0 }: PollingOptions) {
   const pollCount = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopped = useRef(false);
@@ -28,8 +37,14 @@ export function useReceiptPolling(id: string, { onReady, resetKey = 0 }: Polling
           onReady(receipt);
           return;
         }
-      } catch {
-        // ignore transient errors
+      } catch (err) {
+        // Permanent errors (404/401): stop polling and report
+        if (isPermanentError(err)) {
+          stopped.current = true;
+          onError?.(err instanceof Error ? err : new Error(String(err)));
+          return;
+        }
+        // Transient network errors: silently retry
       }
       pollCount.current++;
       if (pollCount.current >= MAX_POLLS) {
@@ -47,5 +62,5 @@ export function useReceiptPolling(id: string, { onReady, resetKey = 0 }: Polling
       stopped.current = true;
       if (timer.current) clearTimeout(timer.current);
     };
-  }, [id, onReady, resetKey]);
+  }, [id, onReady, onError, resetKey]);
 }

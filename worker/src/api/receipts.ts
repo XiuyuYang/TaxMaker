@@ -65,6 +65,54 @@ const SYSTEM_CATEGORY_MAP: Record<string, string> = {
   '其他': 'cat_office',
 };
 
+// ── Keyword-based category fallback (when AI returns null) ────────────────────
+// Returns a Chinese category name or null
+function guessCategoryFromText(merchant: string | null, rawText: string): string | null {
+  // Use merchant name as primary signal (more reliable than raw text)
+  const m = (merchant ?? '').toLowerCase();
+  const full = (m + ' ' + rawText).toLowerCase();
+
+  // Transport FIRST — fuel wins over grocery brand name (e.g. "pak'nsave fuel")
+  if (/fuel|petrol|diesel/.test(m)) return '车辆交通';
+  if (/z energy|bp |gull |mobil |caltex|shell\b|ampol|speedway/.test(m)) return '车辆交通';
+  if (/parking|carpark|car park|vtnz|wof |warrant|rego\b|registration/.test(m)) return '车辆交通';
+  if (/uber|lyft|taxi|cab\b|bus |train |ferry/.test(m)) return '车辆交通';
+  // Also check raw text for transport keywords
+  if (/fuel|petrol|diesel|z energy|gull petrol|bp petrol/.test(full) && !/restaurant|cafe|supermarket/.test(m)) return '车辆交通';
+
+  // Food / groceries
+  const FOOD_BRANDS = ['countdown','pak\'nsave','new world','fresh choice','four square','foodstuffs','woolworths','coles','aldi','costco','bin inn'];
+  if (FOOD_BRANDS.some(b => m.includes(b))) return '餐饮招待';
+  if (/restaurant|cafe|coffee|mcdonald|kfc|burger|pizza|subway|bakery|takeaway|noodle|sushi|kebab|fish.?chip/.test(m)) return '餐饮招待';
+  if (/supermarket|grocery|liquor|bottle.?shop/.test(m)) return '餐饮招待';
+
+  // Accommodation / travel
+  if (/hotel|motel|airbnb|accommodation|lodge|hostel|flight|airline|airport|travel/.test(m)) return '差旅住宿';
+
+  // Telecom
+  if (/spark|vodafone|2degrees|skinny|one nz|telecom|broadband|internet|mobile|phone plan/.test(m)) return '通讯网络';
+
+  // Professional services
+  if (/accounting|lawyer|solicitor|legal|consultant|doctor|gp |medical|dental|pharmacy|chemist|vet |veterinary/.test(m)) return '专业服务';
+
+  // Equipment / electronics
+  if (/bunnings|mitre 10|placemakers|harvey norman|jb hi.?fi|noel leeming|pb tech|computer|laptop|monitor|printer|hardware|tool/.test(m)) return '设备技术';
+
+  // Office supplies
+  if (/warehouse stationery|officeworks|paper|stationery|printing|office supply/.test(m)) return '办公文具';
+
+  // Rent / utilities
+  if (/rent|rates|power|electric|gas bill|water bill|council|body corp/.test(m)) return '租金水电';
+
+  // Insurance
+  if (/insurance|aa insurance|state insurance|tower insurance|ami insurance/.test(m)) return '保险费用';
+
+  // Marketing
+  if (/advertising|google ads|facebook ads|instagram|linkedin|marketing|design|photography/.test(m)) return '市场推广';
+
+  return null;
+}
+
 async function categoryNameToId(
   name: string | null,
   userId: string,
@@ -147,12 +195,10 @@ async function recognizeAndSave(
           .run();
       }
 
-      // Map suggested category
-      const suggestedCategoryId = await categoryNameToId(
-        receiptData.suggested_category,
-        userId,
-        env.DB
-      );
+      // Map suggested category — fall back to keyword matching if AI returned null
+      const aiCategory = receiptData.suggested_category
+        ?? guessCategoryFromText(receiptData.merchant_name, receiptData.raw_text ?? '');
+      const suggestedCategoryId = await categoryNameToId(aiCategory, userId, env.DB);
 
       // Determine GST treatment from category
       let gstTreatment: '100_claimable' | '0_claimable' | 'special_adjustment' = '100_claimable';
@@ -492,6 +538,21 @@ receipts.patch('/:id', async (c) => {
     if (field in patch) {
       updates.push(`${field} = ?`);
       values.push(patch[field] ?? null);
+    }
+  }
+
+  // Auto-recalculate net_amount when total_amount or gst_amount changes
+  // but net_amount is not explicitly provided in the patch
+  if (('total_amount' in patch || 'gst_amount' in patch) && !('net_amount' in patch)) {
+    // Fetch current values to fill in the blanks
+    const current = await c.env.DB.prepare('SELECT total_amount, gst_amount FROM receipts WHERE id = ?')
+      .bind(id)
+      .first<{ total_amount: number | null; gst_amount: number | null }>();
+    const total = (patch['total_amount'] as number | null | undefined) ?? current?.total_amount ?? null;
+    const gst = (patch['gst_amount'] as number | null | undefined) ?? current?.gst_amount ?? null;
+    if (total != null && gst != null) {
+      updates.push('net_amount = ?');
+      values.push(Math.round((total - gst) * 100) / 100);
     }
   }
 

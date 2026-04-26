@@ -14,8 +14,8 @@ routes = [
 ]
 
 [vars]
-GEMINI_MODEL = "baidu/qianfan-ocr-fast:free"
-AI_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
+GEMINI_MODEL = "gemini-2.0-flash-lite"
+AI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
 BASE_PATH = "/tax"
 SESSION_DAYS = "30"
 MAX_UPLOAD_MB = "10"

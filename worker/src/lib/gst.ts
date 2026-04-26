@@ -86,18 +86,24 @@ export function summarizeGST(
     const treatment = r.gst_treatment;
     const categoryMode = r.category_gst_claim_mode;
 
-    if (treatment === 'special_adjustment' || categoryMode === 'special_adjustment') {
+    // Receipt-level gst_treatment takes full precedence over category setting.
+    // Only fall back to categoryMode when treatment is null/unset.
+    if (treatment === '100_claimable') {
+      totalGstClaimable += gst;
+    } else if (treatment === '0_claimable') {
+      totalGstNonClaimable += gst;
+    } else if (treatment === 'special_adjustment') {
       specialAdjustmentsCount += 1;
       // NZ meals/entertainment: only 50% of GST is claimable (IRD rule)
       totalGstClaimable += gst * 0.5;
       totalGstNonClaimable += gst * 0.5;
-    } else if (treatment === '100_claimable') {
-      totalGstClaimable += gst;
-    } else if (treatment === '0_claimable') {
-      totalGstNonClaimable += gst;
     } else {
-      // Fallback to category mode
-      if (categoryMode === 'claimable') {
+      // No receipt-level override — fall back to category mode
+      if (categoryMode === 'special_adjustment') {
+        specialAdjustmentsCount += 1;
+        totalGstClaimable += gst * 0.5;
+        totalGstNonClaimable += gst * 0.5;
+      } else if (categoryMode === 'claimable') {
         totalGstClaimable += gst;
       } else if (categoryMode === 'non_claimable') {
         totalGstNonClaimable += gst;

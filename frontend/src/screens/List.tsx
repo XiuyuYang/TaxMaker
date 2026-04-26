@@ -120,7 +120,7 @@ export default function List() {
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 12 }}>
           <div>
             <div style={{ fontSize: 12, color: t.textTertiary, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.3 }}>
-              共 {total} 张
+              共 {search ? filtered.length : total} 张
             </div>
             <div style={{ fontSize: 22, fontWeight: 700, color: t.textPrimary, letterSpacing: -0.4, marginTop: 2 }}>小票</div>
           </div>

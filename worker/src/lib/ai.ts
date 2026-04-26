@@ -4,30 +4,42 @@ import type { Env, AIResult, AIReceiptData } from '../types';
 const DEFAULT_ENDPOINT =
   'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 
-const SYSTEM_PROMPT = `Parse the receipt image and return ONLY this JSON (no markdown, no explanation):
+const SYSTEM_PROMPT = `You are a receipt OCR assistant. Analyze the receipt image carefully and return ONLY this JSON with no markdown, no explanation, no extra text:
 {"receipts":[{"merchant_name":null,"receipt_date":null,"currency":"NZD","total_amount":null,"gst_amount":null,"suggested_category":null,"confidence_summary":0,"items":[],"raw_text":""}]}
 
-Categories for suggested_category field (use EXACTLY one of these strings):
-办公文具 差旅住宿 车辆交通 餐饮招待 通讯网络 专业服务 设备技术 市场推广 培训教育 租金水电 保险费用
+CRITICAL RULES — follow exactly:
+- merchant_name: exact business name as shown on receipt, or null
+- receipt_date: MUST be "YYYY-MM-DD" format (e.g. "2026-03-15"). Read the year digit by digit — do NOT guess or round. If year is unclear, set null.
+- total_amount: final total including GST as number, or null
+- gst_amount: GST amount if shown, else compute total_amount * 15 / 115 rounded to 2dp, or null
+- confidence_summary: integer 0-100
+- items: [] (always empty — skip line items)
+- raw_text: first 80 chars of visible text on receipt
 
-Rules:
-- merchant_name: store/business name as string or null
-- receipt_date: "YYYY-MM-DD" or null
-- total_amount: total number including GST, or null
-- gst_amount: GST amount (if shown) or total*15/115 rounded to 2dp, or null
-- suggested_category: pick best matching category from the list above (never null if any fits)
-- confidence_summary: 0-100 integer
-- items: empty array [] (skip line items to save space)
-- raw_text: first 100 chars of visible text only
-- For multiple receipts in one image, add multiple objects to receipts array`;
+suggested_category: choose EXACTLY one Chinese string from this list based on what was purchased:
+- 餐饮招待 → food, beverages, groceries, supermarket, restaurant, cafe, fast food, alcohol, snacks
+- 办公文具 → office supplies, stationery, printing, paper, pens
+- 车辆交通 → fuel, petrol, parking, toll, transport, taxi, uber, bus, train
+- 差旅住宿 → hotel, motel, accommodation, flights, travel
+- 通讯网络 → phone, internet, mobile, telecom, data, broadband
+- 专业服务 → accounting, legal, consulting, medical, dental, vet
+- 设备技术 → electronics, hardware, computers, machinery, tools, appliances
+- 市场推广 → advertising, marketing, photography, design, social media
+- 培训教育 → courses, training, books, education, subscriptions
+- 租金水电 → rent, power, electricity, gas, water, rates, insurance_property
+- 保险费用 → insurance (life, health, vehicle)
+
+For groceries/food stores (Countdown, Pak'nSave, New World, Coles, Woolworths, Foodstuffs, etc.) → ALWAYS use 餐饮招待`;
 
 
-// Fallback model pool — tried in order when the primary is rate-limited.
-const FALLBACK_MODELS = [
+
+// OpenRouter fallback models if Google keys all fail
+const OPENROUTER_FALLBACKS = [
+  'baidu/qianfan-ocr-fast:free',
   'google/gemma-4-26b-a4b-it:free',
   'google/gemma-4-31b-it:free',
-  'baidu/qianfan-ocr-fast:free',
 ];
+const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 
 async function callAI(
   endpoint: string,
@@ -78,33 +90,62 @@ export async function recognizeReceipt(
   mimeType: string,
   env: Env
 ): Promise<AIResult> {
-  const endpoint = env.AI_ENDPOINT ?? DEFAULT_ENDPOINT;
-  const primaryModel = env.GEMINI_MODEL ?? 'google/gemma-4-26b-a4b-it:free';
-  const apiKey = env.GEMINI_API_KEY;
+  const googleEndpoint = env.AI_ENDPOINT ?? DEFAULT_ENDPOINT;
+  const model = env.GEMINI_MODEL ?? 'gemini-2.0-flash-lite';
 
-  // Build the candidate model list: primary first, then fallbacks (excluding primary)
-  const candidates = [
-    primaryModel,
-    ...FALLBACK_MODELS.filter(m => m !== primaryModel),
-  ];
+  // Build Google API key pool from GEMINI_API_KEYS (comma-separated) or single GEMINI_API_KEY
+  // Note: GEMINI_API_KEY may be an OpenRouter key (starts with 'sk-') — exclude from Google pool
+  const rawKeys = env.GEMINI_API_KEYS
+    ? env.GEMINI_API_KEYS.split(',').map(k => k.trim()).filter(Boolean)
+    : [];
+  const primaryKey = env.GEMINI_API_KEY?.trim() ?? '';
+  if (primaryKey && !primaryKey.startsWith('sk-')) rawKeys.push(primaryKey);
+  // Deduplicate while preserving order
+  const googleKeys = [...new Set(rawKeys)];
+
+  // OpenRouter auth key: prefer GEMINI_API_KEY if it's an OpenRouter key, else try GEMINI_API_KEYS last entry
+  const openRouterKey = primaryKey.startsWith('sk-') ? primaryKey : '';
 
   let lastError: Error | null = null;
   let content: string | null = null;
 
-  for (const model of candidates) {
+  // ── Phase 1: Try each Google key in rotation ────────────────────────────────
+  for (const key of googleKeys) {
     try {
-      content = await callAI(endpoint, apiKey, model, imageBase64, mimeType);
-      break; // success
+      content = await callAI(googleEndpoint, key, model, imageBase64, mimeType);
+      break;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      // Only continue to fallback on rate-limit (429); hard-fail on auth / bad request
-      if (!lastError.message.includes('429')) throw lastError;
-      // Brief pause before trying the next model
-      await new Promise(r => setTimeout(r, 2000));
+      // Only hard-fail on clear content-level errors (not key/quota errors)
+      const msg = lastError.message;
+      const isKeyError = msg.includes('429') || msg.includes('401') || msg.includes('403')
+        || msg.includes('API_KEY_INVALID') || msg.includes('RESOURCE_EXHAUSTED')
+        || msg.includes('quota') || msg.includes('credits');
+      if (!isKeyError) throw lastError; // bad image, malformed request etc — no point retrying
+      await new Promise(r => setTimeout(r, 300));
     }
   }
 
-  if (!content) throw lastError ?? new Error('All AI models failed');
+  // ── Phase 2: Fall back to OpenRouter free models ────────────────────────────
+  if (!content && openRouterKey) {
+    for (const fbModel of OPENROUTER_FALLBACKS) {
+      try {
+        content = await callAI(OPENROUTER_ENDPOINT, openRouterKey, fbModel, imageBase64, mimeType);
+        break;
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        const msg = lastError.message;
+        // Hard-stop only on OpenRouter-level auth failure (not provider/model errors)
+        const isOpenRouterAuth = (msg.includes('401') || msg.includes('403'))
+          && !msg.includes('provider') && !msg.includes('Provider');
+        if (isOpenRouterAuth) throw lastError;
+        // For any other error (429 rate limit, 400 model rejection, etc.) try next model
+        await new Promise(r => setTimeout(r, 500));
+      }
+    }
+  }
+
+  if (!content) throw lastError ?? new Error('All AI models exhausted');
 
   // ── Parse JSON response ─────────────────────────────────────────────────────
 
@@ -248,6 +289,16 @@ function normalizeAIResult(parsed: unknown): void {
     // Ensure currency and raw_text are strings
     if (typeof obj['currency'] !== 'string') obj['currency'] = 'NZD';
     if (typeof obj['raw_text'] !== 'string') obj['raw_text'] = '';
+    // Ensure nullable string fields exist (some models omit them)
+    for (const f of ['merchant_name', 'receipt_date', 'suggested_category']) {
+      if (!(f in obj)) obj[f] = null;
+    }
+    // Ensure nullable number fields exist
+    for (const f of ['total_amount', 'gst_amount']) {
+      if (!(f in obj)) obj[f] = null;
+    }
+    // Ensure confidence_summary is present
+    if (typeof obj['confidence_summary'] !== 'number') obj['confidence_summary'] = 50;
   }
 }
 

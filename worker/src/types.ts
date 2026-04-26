@@ -2,7 +2,8 @@ export interface Env {
   DB: D1Database;
   R2: R2Bucket;
   ASSETS: Fetcher;
-  GEMINI_API_KEY: string;
+  GEMINI_API_KEY: string;       // primary / fallback key
+  GEMINI_API_KEYS?: string;     // comma-separated key rotation pool
   GEMINI_MODEL?: string;
   AI_ENDPOINT?: string;
   BASE_PATH?: string;

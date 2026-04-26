@@ -44,7 +44,9 @@ export default function Confirm() {
 
   // Form state
   const [merchantName, setMerchantName] = useState('');
-  const [receiptDate, setReceiptDate] = useState('');
+  const [dateYear, setDateYear] = useState('');
+  const [dateMonth, setDateMonth] = useState('');
+  const [dateDay, setDateDay] = useState('');
   const [totalAmount, setTotalAmount] = useState('');
   const [gstAmount, setGstAmount] = useState('');
   const [categoryId, setCategoryId] = useState('');
@@ -60,7 +62,10 @@ export default function Confirm() {
     setReceipt(r);
     setPolling(false);
     setMerchantName(r.merchant_name ?? '');
-    setReceiptDate(r.receipt_date ? r.receipt_date.replace(/\//g, '-').slice(0, 10) : '');
+    const dp = (r.receipt_date ?? '').split('-');
+    setDateYear(dp[0] ?? '');
+    setDateMonth(dp[1] ?? '');
+    setDateDay(dp[2] ?? '');
     setTotalAmount(r.total_amount != null ? String(r.total_amount) : '');
     setGstAmount(r.gst_amount != null ? String(r.gst_amount) : '');
     setCategoryId(r.final_category_id ?? r.suggested_category_id ?? '');
@@ -69,11 +74,23 @@ export default function Confirm() {
     setNotes(r.notes ?? '');
   }, []);
 
-  useReceiptPolling(id ?? '', { onReady, resetKey: pollKey });
+  const onPollError = useCallback((err: Error) => {
+    setPolling(false);
+    const msg = err.message.toLowerCase();
+    if (msg.includes('not found') || msg.includes('404')) {
+      setError('小票不存在或无权访问');
+    } else if (msg.includes('not authenticated') || msg.includes('401')) {
+      navigate('/login');
+    } else {
+      setError(err.message);
+    }
+  }, [navigate]);
+
+  useReceiptPolling(id ?? '', { onReady, onError: onPollError, resetKey: pollKey });
 
   const buildPayload = () => ({
     merchant_name: merchantName || null,
-    receipt_date: receiptDate || null,
+    receipt_date: (dateYear && dateMonth && dateDay) ? `${dateYear}-${dateMonth}-${dateDay}` : null,
     total_amount: totalAmount ? parseFloat(totalAmount) : null,
     gst_amount: gstAmount ? parseFloat(gstAmount) : null,
     final_category_id: categoryId || null,
@@ -186,7 +203,7 @@ export default function Confirm() {
       <Screen t={t}>
         {backHeader('小票详情')}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 32 }}>
-          <div style={{ fontSize: 16, color: t.textSecondary }}>小票不存在或已删除</div>
+          <div style={{ fontSize: 16, color: t.textSecondary }}>{error || '小票不存在或已删除'}</div>
           <Button t={t} variant="primary" size="md" onClick={() => navigate('/list')}>返回列表</Button>
         </div>
         <TabBar t={t} current="list" onChange={s => {
@@ -268,15 +285,65 @@ export default function Confirm() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <label style={{ fontSize: 13, fontWeight: 600, color: t.textSecondary }}>日期</label>
-            <input
-              type="date"
-              value={receiptDate}
-              onChange={e => setReceiptDate(e.target.value)}
-              style={{
-                width: '100%', padding: '12px 14px', background: t.surfaceAlt,
-                border: `1px solid ${t.border}`, borderRadius: 10, fontSize: 15, color: t.textPrimary, outline: 'none',
-              }}
-            />
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 1.5fr', gap: 8 }}>
+              {/* Year */}
+              <select
+                value={dateYear}
+                onChange={e => setDateYear(e.target.value)}
+                style={{
+                  width: '100%', padding: '12px 8px', background: t.surfaceAlt,
+                  border: `1px solid ${t.border}`, borderRadius: 10, fontSize: 15,
+                  color: dateYear ? t.textPrimary : t.textTertiary, outline: 'none',
+                  boxSizing: 'border-box', appearance: 'none', WebkitAppearance: 'none',
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23999' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
+                  paddingRight: 30,
+                }}
+              >
+                <option value="">年</option>
+                {Array.from({ length: 16 }, (_, i) => 2015 + i).map(y => (
+                  <option key={y} value={String(y)}>{y}</option>
+                ))}
+              </select>
+              {/* Month */}
+              <select
+                value={dateMonth}
+                onChange={e => setDateMonth(e.target.value)}
+                style={{
+                  width: '100%', padding: '12px 8px', background: t.surfaceAlt,
+                  border: `1px solid ${t.border}`, borderRadius: 10, fontSize: 15,
+                  color: dateMonth ? t.textPrimary : t.textTertiary, outline: 'none',
+                  boxSizing: 'border-box', appearance: 'none', WebkitAppearance: 'none',
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23999' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
+                  paddingRight: 30,
+                }}
+              >
+                <option value="">月</option>
+                {['01','02','03','04','05','06','07','08','09','10','11','12'].map(m => (
+                  <option key={m} value={m}>{parseInt(m)}月</option>
+                ))}
+              </select>
+              {/* Day */}
+              <select
+                value={dateDay}
+                onChange={e => setDateDay(e.target.value)}
+                style={{
+                  width: '100%', padding: '12px 8px', background: t.surfaceAlt,
+                  border: `1px solid ${t.border}`, borderRadius: 10, fontSize: 15,
+                  color: dateDay ? t.textPrimary : t.textTertiary, outline: 'none',
+                  boxSizing: 'border-box', appearance: 'none', WebkitAppearance: 'none',
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23999' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
+                  paddingRight: 30,
+                }}
+              >
+                <option value="">日</option>
+                {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map(d => (
+                  <option key={d} value={d}>{parseInt(d)}日</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -295,6 +362,7 @@ export default function Confirm() {
                 style={{
                   width: '100%', padding: '12px 14px', background: t.surfaceAlt,
                   border: `1px solid ${t.border}`, borderRadius: 10, fontSize: 15, color: t.textPrimary, outline: 'none',
+                  boxSizing: 'border-box',
                 }}
               />
             </div>
@@ -309,6 +377,7 @@ export default function Confirm() {
                 style={{
                   width: '100%', padding: '12px 14px', background: t.surfaceAlt,
                   border: `1px solid ${t.border}`, borderRadius: 10, fontSize: 15, color: t.textPrimary, outline: 'none',
+                  boxSizing: 'border-box',
                 }}
               />
             </div>
@@ -444,6 +513,7 @@ export default function Confirm() {
               width: '100%', padding: '10px 12px', background: t.surfaceAlt,
               border: `1px solid ${t.border}`, borderRadius: 10, fontSize: 14,
               color: t.textPrimary, resize: 'none', outline: 'none', fontFamily: FONTS.ui,
+              boxSizing: 'border-box',
             }}
           />
         </Card>
