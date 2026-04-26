@@ -25,7 +25,16 @@ export default function Login() {
       await login(username.trim(), password);
       navigate('/dashboard', { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : '登录失败，请重试');
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.includes('Invalid credentials') || msg.includes('401')) {
+        setError('用户名或密码错误');
+      } else if (msg.includes('username and password are required')) {
+        setError('请输入用户名和密码');
+      } else if (msg.toLowerCase().includes('failed to fetch') || msg.includes('NetworkError')) {
+        setError('网络异常，请检查连接后重试');
+      } else {
+        setError(msg || '登录失败，请重试');
+      }
     } finally {
       setLoading(false);
     }

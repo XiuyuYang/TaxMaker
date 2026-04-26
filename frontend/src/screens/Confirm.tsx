@@ -444,30 +444,32 @@ export default function Confirm() {
             ))}
           </div>
 
-          {/* Reclassify toggle */}
-          <div style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            marginTop: 14, paddingTop: 14, borderTop: `1px solid ${t.divider}`,
-          }}>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: t.textPrimary }}>整张小票全部归为此类</div>
-              <div style={{ fontSize: 12, color: t.textTertiary, marginTop: 2 }}>包含所有条目</div>
+          {/* Reclassify toggle — only meaningful when AI extracted line items */}
+          {receipt.items && receipt.items.length > 0 && (
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              marginTop: 14, paddingTop: 14, borderTop: `1px solid ${t.divider}`,
+            }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: t.textPrimary }}>整张小票全部归为此类</div>
+                <div style={{ fontSize: 12, color: t.textTertiary, marginTop: 2 }}>覆盖各条目的 AI 分类</div>
+              </div>
+              <button
+                onClick={() => setReclassifyAll(v => !v)}
+                style={{
+                  width: 48, height: 28, borderRadius: 14, border: 'none', cursor: 'pointer',
+                  background: reclassifyAll ? t.brand : t.surfaceMuted,
+                  position: 'relative', transition: 'background 0.2s',
+                }}
+              >
+                <div style={{
+                  width: 22, height: 22, borderRadius: 11, background: '#fff',
+                  position: 'absolute', top: 3, left: reclassifyAll ? 23 : 3,
+                  transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
+                }} />
+              </button>
             </div>
-            <button
-              onClick={() => setReclassifyAll(v => !v)}
-              style={{
-                width: 48, height: 28, borderRadius: 14, border: 'none', cursor: 'pointer',
-                background: reclassifyAll ? t.brand : t.surfaceMuted,
-                position: 'relative', transition: 'background 0.2s',
-              }}
-            >
-              <div style={{
-                width: 22, height: 22, borderRadius: 11, background: '#fff',
-                position: 'absolute', top: 3, left: reclassifyAll ? 23 : 3,
-                transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
-              }} />
-            </button>
-          </div>
+          )}
         </Card>
 
         {/* GST Treatment */}

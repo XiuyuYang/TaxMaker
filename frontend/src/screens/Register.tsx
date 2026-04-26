@@ -41,7 +41,16 @@ export default function Register() {
       await register(username.trim(), password);
       navigate('/dashboard', { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : '注册失败，请重试');
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.includes('Username already taken') || msg.includes('409')) {
+        setError('该用户名已被使用，请换一个');
+      } else if (msg.includes('Password must be at least 8 characters')) {
+        setError('密码至少需要 8 个字符');
+      } else if (msg.toLowerCase().includes('failed to fetch') || msg.includes('NetworkError')) {
+        setError('网络异常，请检查连接后重试');
+      } else {
+        setError(msg || '注册失败，请重试');
+      }
     } finally {
       setLoading(false);
     }
