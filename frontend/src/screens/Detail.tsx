@@ -33,6 +33,20 @@ export default function Detail() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('info');
   const [imgError, setImgError] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!receipt) return;
+    if (!confirm(`删除小票"${receipt.merchant_name ?? '未命名'}"？此操作不可恢复。`)) return;
+    setDeleting(true);
+    try {
+      await api.receipts.delete(receipt.id);
+      navigate('/list', { replace: true });
+    } catch {
+      setDeleting(false);
+      alert('删除失败，请重试');
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -177,6 +191,17 @@ export default function Detail() {
               onClick={() => navigate(`/confirm/${receipt.id}`)}>
               编辑此小票
             </Button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              style={{
+                background: 'none', border: 'none', color: t.danger,
+                fontSize: 13, fontWeight: 500, cursor: deleting ? 'default' : 'pointer',
+                padding: '8px', opacity: deleting ? 0.5 : 1, alignSelf: 'center', marginTop: 4,
+              }}
+            >
+              {deleting ? '删除中…' : '删除此小票'}
+            </button>
           </div>
         )}
 

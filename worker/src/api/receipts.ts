@@ -712,4 +712,35 @@ receipts.post('/:id/reprocess', async (c) => {
   return c.json({ receipt: updated });
 });
 
+// ── DELETE /:id — permanently delete a receipt and its image ─────────────────
+
+receipts.delete('/:id', async (c) => {
+  const userId = await requireAuth(c);
+  if (!userId) return c.json({ error: 'Not authenticated' }, 401);
+
+  const id = c.req.param('id');
+
+  const receipt = await c.env.DB.prepare(
+    'SELECT image_r2_key FROM receipts WHERE id = ? AND user_id = ?'
+  )
+    .bind(id, userId)
+    .first<{ image_r2_key: string | null }>();
+
+  if (!receipt) return c.json({ error: 'Receipt not found' }, 404);
+
+  // Best-effort delete from R2 (ignore failures so DB cleanup still proceeds)
+  if (receipt.image_r2_key) {
+    try {
+      await c.env.R2.delete(receipt.image_r2_key);
+    } catch { /* ignore — DB cleanup is the source of truth */ }
+  }
+
+  // Cascade-delete items first, then the receipt itself
+  await c.env.DB.prepare('DELETE FROM receipt_items WHERE receipt_id = ?').bind(id).run();
+  await c.env.DB.prepare('DELETE FROM receipts WHERE id = ? AND user_id = ?')
+    .bind(id, userId).run();
+
+  return c.json({ ok: true });
+});
+
 export default receipts;

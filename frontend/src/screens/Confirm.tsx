@@ -42,6 +42,8 @@ export default function Confirm() {
   const [reprocessing, setReprocessing] = useState(false);
   const [pollKey, setPollKey] = useState(0);
   const [imgError, setImgError] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
 
   // Form state
   const [merchantName, setMerchantName] = useState('');
@@ -142,6 +144,20 @@ export default function Confirm() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!id) return;
+    if (!confirm('删除此小票？此操作不可恢复。')) return;
+    setDeleting(true);
+    setError('');
+    try {
+      await api.receipts.delete(id);
+      navigate('/list', { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '删除失败');
+      setDeleting(false);
+    }
+  };
+
   // Reusable back header for early-return states
   const backHeader = (title: string) => (
     <div style={{ padding: '8px 20px 12px', display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -217,26 +233,37 @@ export default function Confirm() {
     );
   }
 
-  if (receipt.status === 'failed') {
+  if (receipt.status === 'failed' && !manualMode) {
     return (
       <Screen t={t}>
         {backHeader('识别失败')}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, padding: 32 }}>
+        <Body style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18, padding: '24px 24px 100px' }}>
           <div style={{ width: 80, height: 80, borderRadius: 20, background: t.dangerSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Icon name="close" size={36} color={t.danger} strokeWidth={2} />
           </div>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 18, fontWeight: 700, color: t.textPrimary, marginBottom: 8 }}>识别失败</div>
-            <div style={{ fontSize: 14, color: t.textSecondary, lineHeight: 1.6 }}>{friendlyFailureReason(receipt.failure_reason)}</div>
+            <div style={{ fontSize: 14, color: t.textSecondary, lineHeight: 1.6, maxWidth: 280 }}>
+              {friendlyFailureReason(receipt.failure_reason)}
+            </div>
           </div>
           {error && <ErrorBanner t={t} message={error} />}
-          <Button t={t} variant="primary" size="lg" block loading={reprocessing} onClick={handleReprocess} icon="refresh">
-            重新识别
-          </Button>
-          <Button t={t} variant="ghost" size="md" block onClick={() => navigate('/list')}>
-            返回列表
-          </Button>
-        </div>
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 360 }}>
+            <Button t={t} variant="primary" size="lg" block loading={reprocessing} onClick={handleReprocess} icon="refresh">
+              重新识别
+            </Button>
+            <Button t={t} variant="secondary" size="md" block onClick={() => setManualMode(true)} icon="edit">
+              手动填写信息
+            </Button>
+            <Button t={t} variant="ghost" size="md" block onClick={() => navigate('/list')}>
+              返回列表
+            </Button>
+            <Button t={t} variant="ghost" size="md" block onClick={handleDelete} loading={deleting}
+              style={{ color: t.danger }}>
+              删除此小票
+            </Button>
+          </div>
+        </Body>
         <TabBar t={t} current="list" onChange={s => {
           if (s === 'home') navigate('/dashboard');
           else if (s === 'capture') navigate('/upload');

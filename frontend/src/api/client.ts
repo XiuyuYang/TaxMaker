@@ -183,6 +183,9 @@ export const api = {
       const res = await request<{ receipt: Receipt }>(`/api/receipts/${id}/reprocess`, { method: 'POST' });
       return res.receipt;
     },
+    delete(id: string): Promise<void> {
+      return request<void>(`/api/receipts/${id}`, { method: 'DELETE' });
+    },
     imageUrl(id: string): string {
       return `${BASE}/api/receipts/${id}/image`;
     },
