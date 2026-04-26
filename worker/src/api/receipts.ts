@@ -383,6 +383,7 @@ receipts.get('/', async (c) => {
   const periodStart = c.req.query('period_start');
   const periodEnd = c.req.query('period_end');
   const categoryId = c.req.query('category_id');
+  const search = c.req.query('search');
   const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
   const perPage = Math.min(100, Math.max(1, parseInt(c.req.query('per_page') ?? '20', 10)));
   const offset = (page - 1) * perPage;
@@ -405,6 +406,11 @@ receipts.get('/', async (c) => {
   if (categoryId) {
     conditions.push('(r.final_category_id = ? OR r.suggested_category_id = ?)');
     bindings.push(categoryId, categoryId);
+  }
+  if (search && search.trim()) {
+    // Case-insensitive substring match across the merchant_name column
+    conditions.push('LOWER(r.merchant_name) LIKE ?');
+    bindings.push('%' + search.trim().toLowerCase() + '%');
   }
 
   const where = conditions.join(' AND ');
@@ -550,6 +556,35 @@ receipts.patch('/:id', async (c) => {
     }
   }
 
+  // GST cannot exceed total — reject the combination if both provided
+  // (or if patching one against an existing value of the other)
+  const newTotal = ('total_amount' in patch ? patch['total_amount'] : undefined) as number | null | undefined;
+  const newGst   = ('gst_amount'   in patch ? patch['gst_amount']   : undefined) as number | null | undefined;
+  if (newTotal !== undefined || newGst !== undefined) {
+    const cur = await c.env.DB.prepare('SELECT total_amount, gst_amount FROM receipts WHERE id = ?')
+      .bind(id)
+      .first<{ total_amount: number | null; gst_amount: number | null }>();
+    const total = (newTotal !== undefined ? newTotal : cur?.total_amount) ?? null;
+    const gst   = (newGst   !== undefined ? newGst   : cur?.gst_amount) ?? null;
+    if (total != null && gst != null && gst > total) {
+      return c.json({ error: 'gst_amount cannot exceed total_amount' }, 400);
+    }
+  }
+
+  // receipt_date must be valid YYYY-MM-DD if provided
+  if ('receipt_date' in patch) {
+    const d = patch['receipt_date'];
+    if (d !== null && d !== undefined) {
+      if (typeof d !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+        return c.json({ error: 'receipt_date must be YYYY-MM-DD' }, 400);
+      }
+      const parsed = new Date(d + 'T00:00:00Z');
+      if (isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== d) {
+        return c.json({ error: 'receipt_date is not a valid calendar date' }, 400);
+      }
+    }
+  }
+
   // Auto-recalculate net_amount when total_amount or gst_amount changes
   // but net_amount is not explicitly provided in the patch
   if (('total_amount' in patch || 'gst_amount' in patch) && !('net_amount' in patch)) {
@@ -658,8 +693,14 @@ receipts.post('/:id/confirm', async (c) => {
 
   const now = new Date().toISOString();
 
+  // Preserve the original confirmed_at on subsequent edits — this matters for
+  // audit/IRD trails where the first confirmation is the meaningful timestamp
   await c.env.DB.prepare(
-    `UPDATE receipts SET status = 'confirmed', confirmed_at = ?, updated_at = ? WHERE id = ?`
+    `UPDATE receipts SET
+       status = 'confirmed',
+       confirmed_at = COALESCE(confirmed_at, ?),
+       updated_at = ?
+     WHERE id = ?`
   )
     .bind(now, now, id)
     .run();

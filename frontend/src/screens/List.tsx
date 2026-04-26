@@ -71,12 +71,13 @@ export default function List() {
   const PER = 30;
 
   const fetchSeq = useRef(0);
-  const fetchReceipts = useCallback(async (pg = 1) => {
+  const fetchReceipts = useCallback(async (pg = 1, searchTerm = '') => {
     const seq = ++fetchSeq.current;
     setLoading(true);
     try {
-      const params: { page: number; per_page: number; status?: string } = { page: pg, per_page: PER };
+      const params: { page: number; per_page: number; status?: string; search?: string } = { page: pg, per_page: PER };
       if (filter !== 'all') params.status = filter;
+      if (searchTerm.trim()) params.search = searchTerm.trim();
       const res = await api.receipts.list(params);
       // Discard if a newer fetch has been kicked off in the meantime
       if (seq !== fetchSeq.current) return;
@@ -93,13 +94,21 @@ export default function List() {
 
   useEffect(() => {
     setPage(1);
-    fetchReceipts(1);
+    fetchReceipts(1, search);
   }, [filter, fetchReceipts]);
 
-  const filtered = receipts.filter(r =>
-    !search || r.merchant_name?.toLowerCase().includes(search.toLowerCase())
-  );
-  const grouped = groupByDate(filtered);
+  // Debounce server-side search by 300ms while user types
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setPage(1);
+      fetchReceipts(1, search);
+    }, 300);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+
+  // No client-side filtering needed now — server handles search
+  const grouped = groupByDate(receipts);
 
   const catName = (id: string | null) =>
     id ? (categories.find(c => c.id === id)?.name ?? '未分类') : '未分类';
@@ -124,11 +133,11 @@ export default function List() {
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 12 }}>
           <div>
             <div style={{ fontSize: 12, color: t.textTertiary, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.3 }}>
-              共 {search ? filtered.length : total} 张
+              共 {total} 张
             </div>
             <div style={{ fontSize: 22, fontWeight: 700, color: t.textPrimary, letterSpacing: -0.4, marginTop: 2 }}>小票</div>
           </div>
-          <button onClick={() => fetchReceipts(1)}
+          <button onClick={() => fetchReceipts(1, search)}
             style={{ width: 36, height: 36, borderRadius: 10, border: `1px solid ${t.border}`, background: t.surface, color: t.textSecondary, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
             <Icon name="refresh" size={17} />
           </button>
@@ -210,7 +219,7 @@ export default function List() {
         {/* Load more */}
         {receipts.length < total && !loading && (
           <div style={{ padding: 20, textAlign: 'center' }}>
-            <Button t={t} variant="secondary" size="sm" onClick={() => { const next = page + 1; setPage(next); fetchReceipts(next); }}>
+            <Button t={t} variant="secondary" size="sm" onClick={() => { const next = page + 1; setPage(next); fetchReceipts(next, search); }}>
               加载更多
             </Button>
           </div>

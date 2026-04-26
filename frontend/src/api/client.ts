@@ -161,7 +161,7 @@ export const api = {
   },
 
   receipts: {
-    list(params?: { status?: string; page?: number; per_page?: number }): Promise<{ receipts: Receipt[]; total: number }> {
+    list(params?: { status?: string; page?: number; per_page?: number; search?: string }): Promise<{ receipts: Receipt[]; total: number }> {
       return request<{ receipts: Receipt[]; total: number }>(`/api/receipts${qs(params ?? {})}`);
     },
     async get(id: string): Promise<Receipt> {
