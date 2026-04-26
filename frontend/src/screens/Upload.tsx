@@ -51,7 +51,20 @@ export default function Upload() {
       const receipt = await api.receipts.upload(file, source);
       navigate(`/confirm/${receipt.id}`, { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : '上传失败，请重试');
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.includes('File too large')) {
+        setError('文件过大，单张图片不能超过 10MB');
+      } else if (msg.includes('File type not allowed')) {
+        setError('仅支持 JPG / PNG / WebP 格式');
+      } else if (msg.includes('Missing image') || msg.includes('Expected multipart')) {
+        setError('图片读取失败，请重新选择');
+      } else if (msg.includes('Not authenticated') || msg.includes('401')) {
+        setError('登录状态已失效，请重新登录');
+      } else if (msg.toLowerCase().includes('failed to fetch') || msg.includes('NetworkError')) {
+        setError('网络异常，请检查连接后重试');
+      } else {
+        setError(msg || '上传失败，请重试');
+      }
       setUploading(false);
     }
   };

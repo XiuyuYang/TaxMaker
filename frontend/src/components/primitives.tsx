@@ -239,11 +239,11 @@ export function Toast({ t, message, tone = 'info', onClose }: ToastProps) {
   const icon = tone === 'success' ? 'check' : tone === 'error' ? 'close' : 'info';
   return (
     <div style={{
-      position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+      position: 'fixed', bottom: 90, left: '50%', transform: 'translateX(-50%)',
       background: bg, color: '#fff', borderRadius: 12, padding: '12px 18px',
       display: 'flex', alignItems: 'center', gap: 8, zIndex: 9999,
       boxShadow: '0 8px 24px rgba(0,0,0,0.25)', fontSize: 14, fontWeight: 500,
-      maxWidth: 360, whiteSpace: 'nowrap' as const,
+      maxWidth: 'calc(100vw - 32px)', textAlign: 'center' as const,
     }}>
       <Icon name={icon} size={16} color="#fff" strokeWidth={2.5} />
       {message}

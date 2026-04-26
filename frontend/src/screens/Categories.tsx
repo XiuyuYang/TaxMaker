@@ -152,8 +152,8 @@ export default function Categories() {
                       style={{ flex: 1, fontSize: 13, background: t.surfaceMuted, border: `1px solid ${t.border}`, borderRadius: 8, padding: '7px 10px', color: t.textPrimary, fontFamily: FONTS.ui, outline: 'none' }}>
                       <option value="claimable">可抵扣 GST</option>
                       <option value="non_claimable">不可抵扣 GST</option>
-                      <option value="mixed">混合</option>
-                      <option value="special_adjustment">特殊调整</option>
+                      <option value="mixed">混合 (50%)</option>
+                      <option value="special_adjustment">特殊调整 (50%)</option>
                     </select>
                     <Button t={t} variant="primary" size="sm" disabled={saving || !newName.trim()} onClick={handleAdd}>
                       {saving ? '…' : '添加'}

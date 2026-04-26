@@ -125,7 +125,12 @@ export default function Confirm() {
       await api.receipts.confirm(id);
       navigate('/list', { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : '确认失败');
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.includes('total_amount and receipt_date are required')) {
+        setError('请填写完整的金额和日期后再确认');
+      } else {
+        setError(msg || '确认失败');
+      }
       setConfirming(false);
     }
   };
