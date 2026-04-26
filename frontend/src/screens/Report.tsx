@@ -39,6 +39,7 @@ export default function Report() {
   const [loading, setLoading] = useState(false);
   const [box5, setBox5] = useState('');
   const [box6, setBox6] = useState('');
+  const [box13, setBox13] = useState('');
   const [exporting, setExporting] = useState(false);
 
   const period = periods[selIdx];
@@ -47,6 +48,8 @@ export default function Report() {
     if (!period) return;
     setLoading(true);
     setSummary(null);
+    setBox5('');
+    setBox13('');
     api.reports.gstSummary(period.start, period.end)
       .then(s => {
         setSummary(s);
@@ -78,8 +81,9 @@ export default function Report() {
 
   const box5num = parseFloat(box5) || 0;
   const box6num = parseFloat(box6) || 0;
+  const box13num = parseFloat(box13) || 0;
   const suggestedBox6 = summary ? summary.total_gst_claimable : 0;
-  const netGst = +(box5num - (box6num || suggestedBox6)).toFixed(2);
+  const netGst = +(box5num - (box6num || suggestedBox6) + box13num).toFixed(2);
 
   const Section = ({ label, children }: { label: string; children: React.ReactNode }) => (
     <div style={{ marginBottom: 16 }}>
@@ -168,12 +172,17 @@ export default function Report() {
                     } />
                   </div>
                   <div style={{ borderBottom: `1px solid ${t.divider}` }}>
-                    <GSTRow label="AI估算调整额" value={summary ? nz(summary.box_13_adjustments) : '—'} />
+                    <GSTRow label="GST 调整额（私用比例等）" value={
+                      <input value={box13} onChange={e => setBox13(e.target.value)} placeholder="0.00"
+                        inputMode="decimal"
+                        style={{ width: 90, textAlign: 'right', fontFamily: FONTS.num, fontSize: 14, background: 'transparent', border: `1px solid ${t.border}`, borderRadius: 6, padding: '3px 6px', color: t.textPrimary, outline: 'none' }} />
+                    } />
                   </div>
                   <GSTRow label="应缴 / 退还 GST" value={summary ? (netGst >= 0 ? `应缴 ${nz(netGst)}` : `退还 ${nz(-netGst)}`) : '—'} highlight />
                 </Card>
-                <div style={{ fontSize: 11, color: t.textTertiary, padding: '8px 4px' }}>
-                  销售GST可手动填写；采购GST已由AI自动估算，仅供参考，请以IRD官方申报为准。
+                <div style={{ fontSize: 11, color: t.textTertiary, padding: '8px 4px', lineHeight: 1.5 }}>
+                  销售GST、调整额由你手动填写；采购GST已由AI自动估算。<br />
+                  调整额用于私用比例修正、坏账冲回等，正数为应补缴，负数为应退还。仅供参考，请以IRD官方申报为准。
                 </div>
               </Section>
 

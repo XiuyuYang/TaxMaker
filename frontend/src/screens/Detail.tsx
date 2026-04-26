@@ -183,16 +183,22 @@ export default function Detail() {
         {tab === 'photo' && (
           <div style={{ padding: 16 }}>
             {imgError ? (
-              <div style={{ textAlign: 'center', padding: 40, color: t.textTertiary, fontSize: 14 }}>
-                <Icon name="image" size={40} color={t.border} />
-                <div style={{ marginTop: 12 }}>图片不可用</div>
+              <div style={{
+                background: t.surfaceMuted, borderRadius: 12, padding: '60px 24px',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+              }}>
+                <Icon name="image" size={44} color={t.textTertiary} />
+                <div style={{ fontSize: 15, fontWeight: 600, color: t.textSecondary }}>图片不可用</div>
+                <div style={{ fontSize: 12, color: t.textTertiary, textAlign: 'center', maxWidth: 240 }}>
+                  此小票可能未上传图片，或图片已被移除
+                </div>
               </div>
             ) : (
               <img
                 src={api.receipts.imageUrl(receipt.id)}
                 alt="receipt"
                 onError={() => setImgError(true)}
-                style={{ width: '100%', borderRadius: 12, display: 'block' }}
+                style={{ width: '100%', borderRadius: 12, display: 'block', background: t.surfaceMuted }}
               />
             )}
           </div>

@@ -41,6 +41,7 @@ export default function Confirm() {
   const [error, setError] = useState('');
   const [reprocessing, setReprocessing] = useState(false);
   const [pollKey, setPollKey] = useState(0);
+  const [imgError, setImgError] = useState(false);
 
   // Form state
   const [merchantName, setMerchantName] = useState('');
@@ -270,11 +271,22 @@ export default function Confirm() {
 
         {/* Receipt image */}
         <Card t={t} style={{ marginBottom: 12, overflow: 'hidden', borderRadius: 16 }}>
-          <img
-            src={api.receipts.imageUrl(receipt.id)}
-            alt="小票图片"
-            style={{ width: '100%', maxHeight: 220, objectFit: 'contain', display: 'block', background: t.surfaceMuted }}
-          />
+          {imgError ? (
+            <div style={{
+              padding: '36px 16px', textAlign: 'center', background: t.surfaceMuted,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+            }}>
+              <Icon name="image" size={32} color={t.textTertiary} />
+              <div style={{ fontSize: 13, color: t.textTertiary }}>图片不可用</div>
+            </div>
+          ) : (
+            <img
+              src={api.receipts.imageUrl(receipt.id)}
+              alt="小票图片"
+              onError={() => setImgError(true)}
+              style={{ width: '100%', maxHeight: 220, objectFit: 'contain', display: 'block', background: t.surfaceMuted }}
+            />
+          )}
         </Card>
 
         {/* Basic info */}

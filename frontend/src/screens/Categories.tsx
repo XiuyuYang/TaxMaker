@@ -20,6 +20,29 @@ export default function Categories() {
   const [saving, setSaving] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const [editMode, setEditMode] = useState<string>('claimable');
+
+  const MODE_LABELS: Record<string, string> = {
+    claimable: '可抵扣',
+    non_claimable: '不可抵扣',
+    mixed: '混合',
+    special_adjustment: '特殊调整',
+  };
+  const MODE_TONES: Record<string, { bg: string; fg: string }> = {
+    claimable:          { bg: '#10B98118', fg: '#059669' },
+    non_claimable:      { bg: '#EF444418', fg: '#DC2626' },
+    mixed:              { bg: '#8B5CF618', fg: '#7C3AED' },
+    special_adjustment: { bg: '#F59E0B18', fg: '#D97706' },
+  };
+  const ModeBadge = ({ mode }: { mode: string }) => {
+    const tone = MODE_TONES[mode] ?? MODE_TONES.claimable;
+    return (
+      <div style={{
+        fontSize: 11, fontWeight: 600, color: tone.fg, background: tone.bg,
+        padding: '2px 8px', borderRadius: 999, whiteSpace: 'nowrap',
+      }}>{MODE_LABELS[mode] ?? mode}</div>
+    );
+  };
 
   const load = () => {
     api.categories.list().then(setCategories).catch(() => {}).finally(() => setLoading(false));
@@ -51,7 +74,7 @@ export default function Categories() {
     if (!editName.trim()) return;
     setSaving(true);
     try {
-      await api.categories.update(id, { name: editName.trim() });
+      await api.categories.update(id, { name: editName.trim(), gst_claim_mode: editMode });
       setEditId(null);
       setEditName('');
       load();
@@ -149,26 +172,39 @@ export default function Categories() {
                 <Card t={t} style={{ padding: 0 }}>
                   {custom.map((c, i) => (
                     <div key={c.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
                       borderTop: i === 0 ? 'none' : `1px solid ${t.divider}`,
+                      padding: editId === c.id ? '12px 16px' : '12px 16px',
                     }}>
-                      <CategoryDot name={c.name} size={36} />
                       {editId === c.id ? (
-                        <>
-                          <input value={editName} onChange={e => setEditName(e.target.value)} autoFocus
-                            onKeyDown={e => { if (e.key === 'Enter') handleEdit(c.id); if (e.key === 'Escape') setEditId(null); }}
-                            style={{ flex: 1, fontSize: 14, background: 'transparent', border: `1px solid ${t.brand}`, borderRadius: 6, padding: '4px 8px', color: t.textPrimary, fontFamily: FONTS.ui, outline: 'none' }} />
-                          <button onClick={() => handleEdit(c.id)} style={{ background: 'none', border: 'none', color: t.brand, cursor: 'pointer', display: 'flex', padding: 4 }}>
-                            <Icon name="check" size={16} />
-                          </button>
-                          <button onClick={() => setEditId(null)} style={{ background: 'none', border: 'none', color: t.textTertiary, cursor: 'pointer', display: 'flex', padding: 4 }}>
-                            <Icon name="close" size={16} />
-                          </button>
-                        </>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <CategoryDot name={editName || c.name} size={36} />
+                            <input value={editName} onChange={e => setEditName(e.target.value)} autoFocus
+                              onKeyDown={e => { if (e.key === 'Enter') handleEdit(c.id); if (e.key === 'Escape') setEditId(null); }}
+                              style={{ flex: 1, fontSize: 14, background: 'transparent', border: `1px solid ${t.brand}`, borderRadius: 6, padding: '6px 10px', color: t.textPrimary, fontFamily: FONTS.ui, outline: 'none' }} />
+                            <button onClick={() => handleEdit(c.id)} style={{ background: 'none', border: 'none', color: t.brand, cursor: 'pointer', display: 'flex', padding: 4 }}>
+                              <Icon name="check" size={16} />
+                            </button>
+                            <button onClick={() => setEditId(null)} style={{ background: 'none', border: 'none', color: t.textTertiary, cursor: 'pointer', display: 'flex', padding: 4 }}>
+                              <Icon name="close" size={16} />
+                            </button>
+                          </div>
+                          <select value={editMode} onChange={e => setEditMode(e.target.value)}
+                            style={{ width: '100%', fontSize: 13, background: t.surfaceMuted, border: `1px solid ${t.border}`, borderRadius: 8, padding: '7px 10px', color: t.textPrimary, fontFamily: FONTS.ui, outline: 'none' }}>
+                            <option value="claimable">可抵扣 GST</option>
+                            <option value="non_claimable">不可抵扣 GST</option>
+                            <option value="mixed">混合</option>
+                            <option value="special_adjustment">特殊调整 (50%)</option>
+                          </select>
+                        </div>
                       ) : (
-                        <>
-                          <div style={{ flex: 1, fontSize: 14, fontWeight: 500, color: t.textPrimary }}>{c.name}</div>
-                          <button onClick={() => { setEditId(c.id); setEditName(c.name); setAdding(false); }}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <CategoryDot name={c.name} size={36} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 500, color: t.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
+                            <div style={{ marginTop: 4 }}><ModeBadge mode={c.gst_claim_mode} /></div>
+                          </div>
+                          <button onClick={() => { setEditId(c.id); setEditName(c.name); setEditMode(c.gst_claim_mode || 'claimable'); setAdding(false); }}
                             style={{ background: 'none', border: 'none', color: t.textTertiary, cursor: 'pointer', display: 'flex', padding: 4 }}>
                             <Icon name="edit" size={15} />
                           </button>
@@ -176,7 +212,7 @@ export default function Categories() {
                             style={{ background: 'none', border: 'none', color: '#D94F4F', cursor: 'pointer', display: 'flex', padding: 4 }}>
                             <Icon name="close" size={15} />
                           </button>
-                        </>
+                        </div>
                       )}
                     </div>
                   ))}
@@ -192,8 +228,11 @@ export default function Categories() {
                     borderTop: i === 0 ? 'none' : `1px solid ${t.divider}`,
                   }}>
                     <CategoryDot name={c.name} size={36} />
-                    <div style={{ flex: 1, fontSize: 14, fontWeight: 500, color: t.textPrimary }}>{c.name}</div>
-                    <div style={{ fontSize: 12, color: t.textTertiary, background: t.surfaceMuted, padding: '2px 8px', borderRadius: 999 }}>系统</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 500, color: t.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
+                      <div style={{ marginTop: 4 }}><ModeBadge mode={c.gst_claim_mode} /></div>
+                    </div>
+                    <div style={{ fontSize: 11, color: t.textTertiary, background: t.surfaceMuted, padding: '2px 8px', borderRadius: 999, flexShrink: 0 }}>系统</div>
                   </div>
                 ))}
               </Card>
